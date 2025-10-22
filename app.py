@@ -13,7 +13,7 @@ from analyze_trace import TraceAnalyzer
 from collections import defaultdict
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
 
 ALLOWED_EXTENSIONS = {'json'}
@@ -46,23 +46,18 @@ def analyze_api():
     if not allowed_file(file.filename):
         return jsonify({'error': 'Invalid file type. Only JSON files are allowed.'}), 400
     
-    # Get strip_query_params parameter (default: True)
     strip_query_params = request.form.get('strip_query_params', 'true').lower() == 'true'
     
     try:
-        # Save uploaded file temporarily
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        # Analyze the trace file
         analyzer = TraceAnalyzer(strip_query_params=strip_query_params)
         analyzer.process_trace_file(filepath)
         
-        # Clean up the uploaded file
         os.remove(filepath)
         
-        # Prepare results
         results = prepare_results(analyzer)
         
         return jsonify(results)
@@ -89,23 +84,18 @@ def analyze_web():
     if not allowed_file(file.filename):
         return render_template('index.html', error='Invalid file type. Only JSON files are allowed.')
     
-    # Get strip_query_params parameter (checkbox: present = checked = true)
     strip_query_params = 'strip_query_params' in request.form
     
     try:
-        # Save uploaded file temporarily
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        # Analyze the trace file
         analyzer = TraceAnalyzer(strip_query_params=strip_query_params)
         analyzer.process_trace_file(filepath)
         
-        # Clean up the uploaded file
         os.remove(filepath)
         
-        # Prepare results
         results = prepare_results(analyzer)
         
         return render_template('results.html', 
@@ -117,10 +107,7 @@ def analyze_web():
 
 
 def prepare_results(analyzer):
-    """
-    Convert analyzer results to a structured format for JSON/HTML output.
-    """
-    # Group incoming requests by service
+    """Convert analyzer results to a structured format for JSON/HTML output."""
     services_data = defaultdict(list)
     for (service, endpoint, param), stats in analyzer.endpoint_params.items():
         services_data[service].append({
@@ -131,11 +118,9 @@ def prepare_results(analyzer):
             'total_time_formatted': analyzer.format_time(stats['total_time_ms'])
         })
     
-    # Sort each service's data by total time descending
     for service in services_data:
         services_data[service].sort(key=lambda x: -x['total_time_ms'])
     
-    # Calculate service-level statistics
     services_summary = []
     for service, endpoints in services_data.items():
         total_count = sum(e['count'] for e in endpoints)
@@ -150,7 +135,6 @@ def prepare_results(analyzer):
     
     services_summary.sort(key=lambda x: -x['total_time_ms'])
     
-    # Group service-to-service calls
     service_calls = defaultdict(list)
     for (caller, callee, endpoint, param), stats in analyzer.service_calls.items():
         service_calls[(caller, callee)].append({
@@ -161,7 +145,6 @@ def prepare_results(analyzer):
             'total_time_formatted': analyzer.format_time(stats['total_time_ms'])
         })
     
-    # Sort each pair's data by total time descending
     service_calls_list = []
     for (caller, callee), calls in service_calls.items():
         calls.sort(key=lambda x: -x['total_time_ms'])
@@ -179,7 +162,6 @@ def prepare_results(analyzer):
     
     service_calls_list.sort(key=lambda x: -x['total_time_ms'])
     
-    # Overall statistics
     total_requests = sum(stats['count'] for stats in analyzer.endpoint_params.values())
     total_time_ms = sum(stats['total_time_ms'] for stats in analyzer.endpoint_params.values())
     
@@ -201,9 +183,8 @@ def prepare_results(analyzer):
 
 
 if __name__ == '__main__':
-    # Create templates and static directories if they don't exist
     os.makedirs('templates', exist_ok=True)
     os.makedirs('static', exist_ok=True)
     
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5000)
 
