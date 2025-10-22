@@ -63,6 +63,37 @@ Trace_Analyser/
 pip install -r requirements.txt
 ```
 
+## Docker Deployment
+
+### Using Docker
+
+1. **Build the image:**
+```bash
+docker build -t trace-analyzer .
+```
+
+2. **Run the container:**
+```bash
+docker run -p 5000:5000 trace-analyzer
+```
+
+Then open `http://localhost:5000` in your browser.
+
+### Using Docker Compose
+
+1. **Start the service:**
+```bash
+docker-compose up --build
+```
+
+2. **Access the application:**
+Open `http://localhost:5000` in your browser.
+
+3. **Stop the service:**
+```bash
+docker-compose down
+```
+
 ## Usage
 
 ### Option 1: Web Application (Recommended)

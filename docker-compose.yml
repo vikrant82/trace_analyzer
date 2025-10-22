@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  trace-analyzer:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/tmp
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+    restart: unless-stopped
