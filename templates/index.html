@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trace Endpoint Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Trace Endpoint Analyzer</h1>
+            <p class="subtitle">Analyze Grafana trace files and visualize endpoint performance</p>
+        </header>
+
+        <main>
+            <div class="upload-section">
+                <h2>Upload Trace File</h2>
+                <p>Upload a Grafana trace JSON file to analyze HTTP endpoints, service calls, and performance metrics.</p>
+                
+                {% if error %}
+                <div class="alert alert-error">
+                    <strong>Error:</strong> {{ error }}
+                </div>
+                {% endif %}
+
+                <form action="/analyze" method="post" enctype="multipart/form-data" id="uploadForm">
+                    <div class="file-input-wrapper">
+                        <input type="file" name="file" id="fileInput" accept=".json" required>
+                        <label for="fileInput" class="file-label">
+                            <span class="file-icon">📁</span>
+                            <span class="file-text">Choose a JSON file</span>
+                        </label>
+                        <span class="file-name" id="fileName">No file selected</span>
+                    </div>
+                    
+                    <div class="options-section">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="strip_query_params" id="stripQueryParams" checked>
+                            <span>Strip query parameters from URLs (recommended)</span>
+                        </label>
+                        <p class="option-help">Groups similar endpoints together by removing query strings like ?param=value</p>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-icon">🚀</span>
+                        Analyze Trace File
+                    </button>
+                </form>
+
+                <div id="loading" class="loading-spinner" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Analyzing trace file... This may take a moment for large files.</p>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>Features</h3>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h4>Endpoint Analysis</h4>
+                        <p>Track HTTP endpoints with parameter normalization (UUIDs, IDs)</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⏱️</div>
+                        <h4>Performance Metrics</h4>
+                        <p>Total time spent per endpoint, sorted by slowest first</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔗</div>
+                        <h4>Service Dependencies</h4>
+                        <p>Visualize service-to-service call relationships</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📈</div>
+                        <h4>Call Frequency</h4>
+                        <p>Count and aggregate calls per endpoint pattern</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="api-section">
+                <h3>API Usage</h3>
+                <p>You can also use the REST API to programmatically analyze trace files:</p>
+                <pre><code>curl -X POST -F "file=@trace.json" http://localhost:5000/api/analyze</code></pre>
+            </div>
+        </main>
+
+        <footer>
+            <p>Built with Flask • <a href="https://github.com" target="_blank">View on GitHub</a></p>
+        </footer>
+    </div>
+
+    <script>
+        // File input handler
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const uploadForm = document.getElementById('uploadForm');
+        const loading = document.getElementById('loading');
+
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                fileName.textContent = e.target.files[0].name;
+            } else {
+                fileName.textContent = 'No file selected';
+            }
+        });
+
+        uploadForm.addEventListener('submit', function() {
+            loading.style.display = 'block';
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Results - Trace Endpoint Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Analysis Results</h1>
+            <p class="subtitle">{{ filename }}</p>
+            <a href="/" class="btn btn-secondary">← Analyze Another File</a>
+        </header>
+
+        <main>
+            <!-- Summary Section -->
+            <section class="summary-section">
+                <h2>Summary Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">{{ results.summary.total_requests }}</div>
+                        <div class="stat-label">Total Requests</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{{ results.summary.total_time_formatted }}</div>
+                        <div class="stat-label">Total Time</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{{ results.summary.unique_services }}</div>
+                        <div class="stat-label">Unique Services</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{{ results.summary.unique_combinations }}</div>
+                        <div class="stat-label">Endpoint Combinations</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Services Summary -->
+            <section class="services-overview">
+                <h2>Services Overview</h2>
+                    <div class="table-wrapper">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Service Name</th>
+                                    <th class="sortable" data-sort="number">Requests <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="number">Unique Endpoints <span class="sort-icon"></span></th>
+                                </tr>
+                            </thead>
+                        <tbody>
+                            {% for service in results.services.summary %}
+                            <tr>
+                                <td class="service-name">
+                                    <a href="#service-{{ loop.index }}">{{ service.name }}</a>
+                                </td>
+                                <td>{{ service.request_count }}</td>
+                                <td class="time-cell">{{ service.total_time_formatted }}</td>
+                                <td>{{ service.unique_combinations }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Incoming Requests by Service -->
+            <section class="endpoints-section">
+                <h2>Incoming Requests by Service</h2>
+                <p class="section-note">Endpoints sorted by total time (slowest first)</p>
+                
+                {% for service in results.services.summary %}
+                <div class="service-detail" id="service-{{ loop.index }}">
+                    <h3>{{ service.name }}</h3>
+                    <div class="service-stats">
+                        <span><strong>Requests:</strong> {{ service.request_count }}</span>
+                        <span><strong>Total Time:</strong> {{ service.total_time_formatted }}</span>
+                        <span><strong>Unique:</strong> {{ service.unique_combinations }}</span>
+                    </div>
+                    
+                    <div class="table-wrapper">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Normalized Endpoint</th>
+                                    <th>Parameter Value</th>
+                                    <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for endpoint in results.services.details[service.name] %}
+                                <tr>
+                                    <td class="endpoint-cell">{{ endpoint.endpoint }}</td>
+                                    <td class="param-cell">
+                                        {% if endpoint.parameter|length > 50 %}
+                                            <span title="{{ endpoint.parameter }}">{{ endpoint.parameter[:47] }}...</span>
+                                        {% else %}
+                                            {{ endpoint.parameter }}
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ endpoint.count }}</td>
+                                    <td class="time-cell">{{ endpoint.total_time_formatted }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </section>
+
+            <!-- Service-to-Service Calls -->
+            {% if results.service_calls %}
+            <section class="service-calls-section">
+                <h2>Service-to-Service Calls</h2>
+                <p class="section-note">Outgoing HTTP calls between services, sorted by total time</p>
+                
+                {% for call_pair in results.service_calls %}
+                <div class="service-call-detail">
+                    <h3>{{ call_pair.caller }} → {{ call_pair.callee }}</h3>
+                    <div class="service-stats">
+                        <span><strong>Total Calls:</strong> {{ call_pair.total_calls }}</span>
+                        <span><strong>Total Time:</strong> {{ call_pair.total_time_formatted }}</span>
+                        <span><strong>Unique Endpoints:</strong> {{ call_pair.calls|length }}</span>
+                    </div>
+                    
+                    <div class="table-wrapper">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Normalized Endpoint</th>
+                                    <th>Parameter Value</th>
+                                    <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for call in call_pair.calls %}
+                                <tr>
+                                    <td class="endpoint-cell">{{ call.endpoint }}</td>
+                                    <td class="param-cell">
+                                        {% if call.parameter|length > 50 %}
+                                            <span title="{{ call.parameter }}">{{ call.parameter[:47] }}...</span>
+                                        {% else %}
+                                            {{ call.parameter }}
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ call.count }}</td>
+                                    <td class="time-cell">{{ call.total_time_formatted }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </section>
+            {% endif %}
+        </main>
+
+        <footer>
+            <a href="/" class="btn btn-primary">Analyze Another File</a>
+        </footer>
+    </div>
+
+    <script>
+        // Table sorting functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const tables = document.querySelectorAll('.sortable-table');
+            
+            tables.forEach(table => {
+                const headers = table.querySelectorAll('th.sortable');
+                
+                headers.forEach(header => {
+                    header.addEventListener('click', () => {
+                        // Get the actual column index in the table
+                        const allHeaders = Array.from(table.querySelectorAll('th'));
+                        const columnIndex = allHeaders.indexOf(header);
+                        sortTable(table, columnIndex, header.dataset.sort);
+                    });
+                });
+            });
+        });
+
+        function sortTable(table, columnIndex, sortType) {
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            if (rows.length === 0) return;
+            
+            const allHeaders = table.querySelectorAll('th');
+            const header = allHeaders[columnIndex];
+            if (!header) return;
+            
+            const currentSort = header.dataset.currentSort || 'none';
+            
+            // Clear all sort indicators
+            allHeaders.forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                th.dataset.currentSort = 'none';
+            });
+            
+            // Determine sort direction
+            let sortOrder = 'asc';
+            if (currentSort === 'asc') {
+                sortOrder = 'desc';
+            }
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                const aCell = a.cells[columnIndex];
+                const bCell = b.cells[columnIndex];
+                
+                if (!aCell || !bCell) return 0;
+                
+                const aValue = aCell.textContent.trim();
+                const bValue = bCell.textContent.trim();
+                
+                let comparison = 0;
+                
+                if (sortType === 'number') {
+                    const aNum = parseInt(aValue.replace(/,/g, '')) || 0;
+                    const bNum = parseInt(bValue.replace(/,/g, '')) || 0;
+                    comparison = aNum - bNum;
+                } else if (sortType === 'time') {
+                    const aMs = parseTimeToMs(aValue);
+                    const bMs = parseTimeToMs(bValue);
+                    comparison = aMs - bMs;
+                } else {
+                    comparison = aValue.localeCompare(bValue);
+                }
+                
+                return sortOrder === 'asc' ? comparison : -comparison;
+            });
+            
+            // Update table
+            rows.forEach(row => tbody.appendChild(row));
+            
+            // Update sort indicator
+            header.classList.add(sortOrder === 'asc' ? 'sort-asc' : 'sort-desc');
+            header.dataset.currentSort = sortOrder;
+        }
+
+        function parseTimeToMs(timeStr) {
+            // Parse time strings like "12.45 s", "245.50 ms", "2m 15.30s"
+            let ms = 0;
+            
+            // Match minutes
+            const minMatch = timeStr.match(/(\d+)m/);
+            if (minMatch) {
+                ms += parseInt(minMatch[1]) * 60000;
+            }
+            
+            // Match seconds
+            const secMatch = timeStr.match(/([\d.]+)\s*s/);
+            if (secMatch) {
+                ms += parseFloat(secMatch[1]) * 1000;
+            }
+            
+            // Match milliseconds
+            const msMatch = timeStr.match(/([\d.]+)\s*ms/);
+            if (msMatch) {
+                ms += parseFloat(msMatch[1]);
+            }
+            
+            return ms;
+        }
+    </script>
+</body>
+</html>
+
