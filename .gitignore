@@ -18,6 +18,10 @@ lib64/
 parts/
 sdist/
 var/
+
+# Test files
+kafka_test_analysis.md
+Trace-*.json
 wheels/
 *.egg-info/
 .installed.cfg
