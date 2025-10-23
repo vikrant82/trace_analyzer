@@ -35,6 +35,16 @@
                         <div class="stat-value">{{ results.summary.unique_combinations }}</div>
                         <div class="stat-label">Endpoint Combinations</div>
                     </div>
+                    {% if results.summary.total_kafka_operations > 0 %}
+                    <div class="stat-card">
+                        <div class="stat-value">{{ results.summary.total_kafka_operations }}</div>
+                        <div class="stat-label">Kafka Operations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{{ results.summary.total_kafka_time_formatted }}</div>
+                        <div class="stat-label">Kafka Total Time</div>
+                    </div>
+                    {% endif %}
                 </div>
             </section>
 
@@ -151,6 +161,56 @@
                                     </td>
                                     <td>{{ call.count }}</td>
                                     <td class="time-cell">{{ call.total_time_formatted }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </section>
+            {% endif %}
+
+            <!-- Kafka/Messaging Operations -->
+            {% if results.kafka_operations %}
+            <section class="kafka-operations-section">
+                <h2>Kafka/Messaging Operations</h2>
+                <p class="section-note">Kafka consumer/producer operations and message processing, sorted by total time</p>
+                
+                {% for kafka_service in results.kafka_operations %}
+                <div class="kafka-service-detail">
+                    <h3>{{ kafka_service.service }}</h3>
+                    <div class="service-stats">
+                        <span><strong>Total Operations:</strong> {{ kafka_service.total_operations }}</span>
+                        <span><strong>Total Time:</strong> {{ kafka_service.total_time_formatted }}</span>
+                        <span><strong>Unique Operations:</strong> {{ kafka_service.operations|length }}</span>
+                    </div>
+                    
+                    <div class="table-wrapper">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Operation Type</th>
+                                    <th>Message/Span Name</th>
+                                    <th>Details</th>
+                                    <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for operation in kafka_service.operations %}
+                                <tr>
+                                    <td class="operation-type">{{ operation.operation }}</td>
+                                    <td class="message-type">{{ operation.message_type }}</td>
+                                    <td class="details-cell">
+                                        {% if operation.details|length > 60 %}
+                                            <span title="{{ operation.details }}">{{ operation.details[:57] }}...</span>
+                                        {% else %}
+                                            {{ operation.details }}
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ operation.count }}</td>
+                                    <td class="time-cell">{{ operation.total_time_formatted }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

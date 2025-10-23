@@ -1,29 +1,35 @@
 # Trace Analyzer
 
-A powerful Python tool to analyze OpenTelemetry trace files and extract HTTP endpoint performance metrics.
+A powerful Python tool to analyze OpenTelemetry trace files and extract HTTP endpoint performance metrics and Kafka/messaging operations.
 
 Available as both a **CLI tool** and a **Web Application** with REST API.
 
-Perfect for analyzing distributed systems, microservices architectures, and identifying performance bottlenecks.
+Perfect for analyzing distributed systems, microservices architectures, event-driven systems, and identifying performance bottlenecks.
 
 ## Features
 
 - Efficiently processes large trace files using streaming JSON parsing
-- **Distinguishes between incoming and outgoing HTTP requests**
+- **Analyzes HTTP requests:**
+  - Distinguishes between incoming and outgoing HTTP requests
   - Incoming: relative paths (e.g., `/api/users/123`)
   - Outgoing: full URLs (e.g., `http://service.cluster.local/...`)
+  - Tracks service-to-service call relationships
+- **Analyzes Kafka/messaging operations:**
+  - Detects Kafka consumer and producer operations
+  - Tracks message processing spans
+  - Extracts message IDs, service IDs, and operation details
 - Extracts and groups endpoints by service name
 - Detects and normalizes URL parameters (UUIDs, numeric IDs, encoded strings)
-- **Tracks timing information** - calculates total time spent per endpoint
+- **Tracks timing information** - calculates total time spent per endpoint/operation
 - Tracks each unique endpoint-parameter combination per service
-- **Tracks service-to-service call relationships** by extracting target service from URLs
-- Generates a markdown report with:
+- Generates comprehensive reports with:
   - Summary statistics across all services (requests + time)
-  - Section 1: Incoming requests by service (what each service receives)
-  - Section 2: Service-to-service calls (caller → callee with endpoints)
+  - Section 1: Incoming HTTP requests by service
+  - Section 2: Service-to-service HTTP calls (caller → callee)
+  - Section 3: Kafka/messaging operations by service
   - Table of contents with service links
-  - Each table includes: Normalized Endpoint, Parameter Value, Count, **Total Time**
-  - **All data sorted by Total Time (descending)** - shows slowest endpoints first
+  - Each table includes: Operation details, Count, **Total Time**
+  - **All data sorted by Total Time (descending)** - shows slowest operations first
 
 ## Quick Start
 
@@ -33,9 +39,10 @@ See [QUICKSTART.md](QUICKSTART.md) for a quick 3-step guide to get started!
 
 This tool analyzes OpenTelemetry trace files exported from observability platforms like Grafana, Jaeger, or similar systems. It provides insights into:
 - Service-level performance metrics
-- Endpoint call frequencies and latencies
+- HTTP endpoint call frequencies and latencies
 - Service-to-service communication patterns
-- Performance bottlenecks
+- Kafka/messaging operation patterns and performance
+- Performance bottlenecks in both HTTP and messaging layers
 
 ## Project Structure
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Trace Endpoint Analyzer
-Parses OpenTelemetry trace JSON files and analyzes HTTP endpoints with parameter tracking.
+Parses OpenTelemetry trace JSON files and analyzes HTTP endpoints and Kafka/messaging operations.
 """
 
 import ijson
@@ -23,6 +23,7 @@ class TraceAnalyzer:
         self.strip_query_params = strip_query_params
         self.endpoint_params = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
         self.service_calls = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
+        self.kafka_messages = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
         self.span_map = {}
         
         self.uuid_pattern = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
@@ -115,6 +116,37 @@ class TraceAnalyzer:
             return service
         return 'unknown-service'
     
+    def extract_kafka_info(self, span: Dict, attributes: List) -> Tuple[str, str, str]:
+        """
+        Extract Kafka messaging information from span.
+        Returns: (operation_type, message_type, details)
+        - operation_type: 'consumer', 'producer', 'internal'
+        - message_type: the span name or message identifier
+        - details: additional context from attributes
+        """
+        span_kind = span.get('kind', '')
+        span_name = span.get('name', '')
+        
+        operation_type = 'internal'
+        if span_kind == 'SPAN_KIND_CONSUMER':
+            operation_type = 'consumer'
+        elif span_kind == 'SPAN_KIND_PRODUCER':
+            operation_type = 'producer'
+        
+        details_parts = []
+        for attr in attributes:
+            key = attr.get('key', '')
+            value = attr.get('value', {})
+            string_value = value.get('stringValue', '')
+            
+            if key in ['amf-service-id', 'amf-message-id', 'Kafka client', 'Message Uuid']:
+                if string_value:
+                    details_parts.append(f"{key}={string_value}")
+        
+        details = ', '.join(details_parts) if details_parts else '[no-details]'
+        
+        return operation_type, span_name, details
+    
     def format_time(self, ms: float) -> str:
         """Format time in milliseconds to a human-readable string."""
         if ms < 1000:
@@ -189,6 +221,12 @@ class TraceAnalyzer:
                                     call_key = (service_name, target_service, normalized_path, '[no-params]')
                                     self.service_calls[call_key]['count'] += 1
                                     self.service_calls[call_key]['total_time_ms'] += duration_ms
+                        else:
+                            operation_type, message_type, details = self.extract_kafka_info(span, attributes)
+                            if operation_type in ['consumer', 'producer']:
+                                kafka_key = (service_name, operation_type, message_type, details)
+                                self.kafka_messages[kafka_key]['count'] += 1
+                                self.kafka_messages[kafka_key]['total_time_ms'] += duration_ms
                 
                 if batch_count % 100 == 0:
                     print(f"  Processed {batch_count} batches, {span_count} spans...")
@@ -196,6 +234,7 @@ class TraceAnalyzer:
         print(f"Completed: {batch_count} batches, {span_count} spans processed")
         print(f"Found {len(self.endpoint_params)} unique endpoint-parameter combinations")
         print(f"Found {len(self.service_calls)} unique service-to-service call combinations")
+        print(f"Found {len(self.kafka_messages)} unique Kafka/messaging operations")
     
     def generate_markdown_report(self, output_file: str):
         """Generate a markdown file with the analysis results."""
@@ -300,6 +339,47 @@ class TraceAnalyzer:
                         f.write(f"| {endpoint} | {display_param} | {count} | {self.format_time(time_ms)} |\n")
                     
                     f.write("\n")
+            
+            if self.kafka_messages:
+                f.write("---\n\n")
+                f.write("# Kafka/Messaging Operations\n\n")
+                f.write("*This section shows Kafka consumer/producer operations and message processing.*  \n")
+                f.write("*Tables are sorted by Total Time (descending).*\n\n")
+                
+                kafka_by_service = defaultdict(list)
+                for (service, operation, message_type, details), stats in self.kafka_messages.items():
+                    kafka_by_service[service].append((operation, message_type, details, stats['count'], stats['total_time_ms']))
+                
+                sorted_kafka_services = sorted(kafka_by_service.keys())
+                
+                total_kafka_time = sum(stats['total_time_ms'] for stats in self.kafka_messages.values())
+                total_kafka_ops = sum(stats['count'] for stats in self.kafka_messages.values())
+                
+                f.write(f"**Total Messaging Operations:** {total_kafka_ops}  \n")
+                f.write(f"**Total Time (Messaging):** {self.format_time(total_kafka_time)}  \n")
+                f.write(f"**Services with Messaging:** {len(kafka_by_service)}  \n\n")
+                
+                for service in sorted_kafka_services:
+                    kafka_data = kafka_by_service[service]
+                    
+                    sorted_kafka_data = sorted(kafka_data, key=lambda x: (-x[4], x[1], x[0]))
+                    
+                    service_ops = sum(count for _, _, _, count, _ in kafka_data)
+                    service_time = sum(time_ms for _, _, _, _, time_ms in kafka_data)
+                    
+                    f.write(f"## {service}\n\n")
+                    f.write(f"**Total Operations:** {service_ops}  \n")
+                    f.write(f"**Total Time:** {self.format_time(service_time)}  \n")
+                    f.write(f"**Unique Operations:** {len(kafka_data)}  \n\n")
+                    
+                    f.write("| Operation Type | Message/Span Name | Details | Count | Total Time |\n")
+                    f.write("|----------------|-------------------|---------|-------|------------|\n")
+                    
+                    for operation, message_type, details, count, time_ms in sorted_kafka_data:
+                        display_details = details if len(details) <= 60 else f"{details[:57]}..."
+                        f.write(f"| {operation} | {message_type} | {display_details} | {count} | {self.format_time(time_ms)} |\n")
+                    
+                    f.write("\n")
         
         print(f"Report generated successfully!")
         
@@ -331,11 +411,29 @@ class TraceAnalyzer:
             for (caller, callee), stats in sorted_pairs:
                 print(f"{self.format_time(stats['total_time_ms']):>12s} ({stats['count']:4d} calls)  {caller} → {callee}")
         
-        print("\n=== Top 10 Slowest Incoming Requests (by Total Time) ===")
-        top_10 = sorted(self.endpoint_params.items(), key=lambda x: -x[1]['total_time_ms'])[:10]
-        for (service, endpoint, param), stats in top_10:
-            display_param = param if len(param) <= 30 else f"{param[:27]}..."
-            print(f"{self.format_time(stats['total_time_ms']):>12s} ({stats['count']:4d}x)  [{service}] {endpoint} | {display_param}")
+        if self.endpoint_params:
+            print("\n=== Top 10 Slowest Incoming Requests (by Total Time) ===")
+            top_10 = sorted(self.endpoint_params.items(), key=lambda x: -x[1]['total_time_ms'])[:10]
+            for (service, endpoint, param), stats in top_10:
+                display_param = param if len(param) <= 30 else f"{param[:27]}..."
+                print(f"{self.format_time(stats['total_time_ms']):>12s} ({stats['count']:4d}x)  [{service}] {endpoint} | {display_param}")
+        
+        if self.kafka_messages:
+            print(f"\n=== Kafka/Messaging Operations ===")
+            print(f"Total messaging operations: {sum(stats['count'] for stats in self.kafka_messages.values())}")
+            print(f"Total time (messaging): {self.format_time(sum(stats['total_time_ms'] for stats in self.kafka_messages.values()))}")
+            
+            kafka_by_service = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
+            for (service, operation, message_type, details), stats in self.kafka_messages.items():
+                kafka_by_service[service]['count'] += stats['count']
+                kafka_by_service[service]['total_time_ms'] += stats['total_time_ms']
+            
+            print(f"Services with messaging: {len(kafka_by_service)}")
+            print("\nTop messaging operations (by total time):")
+            top_kafka = sorted(self.kafka_messages.items(), key=lambda x: -x[1]['total_time_ms'])[:10]
+            for (service, operation, message_type, details), stats in top_kafka:
+                display_msg = message_type if len(message_type) <= 40 else f"{message_type[:37]}..."
+                print(f"{self.format_time(stats['total_time_ms']):>12s} ({stats['count']:4d}x)  [{service}] {operation}: {display_msg}")
 
 
 def main():

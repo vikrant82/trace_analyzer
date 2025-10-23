@@ -2,22 +2,38 @@
 
 ## 🚀 Get Started in 3 Steps
 
-### Step 1: Install Dependencies
+### Step 1: Choose Your Setup
+
+#### Option A: Traditional Installation
 
 ```bash
 pip install -r requirements.txt
+```
+
+#### Option B: Docker (Recommended)
+
+```bash
+docker build -t trace-analyzer .
+# or
+docker-compose up --build
 ```
 
 ### Step 2: Choose Your Method
 
 #### Method A: Web Application (Easiest)
 
+**With Python:**
 ```bash
-# Start the server
 python app.py
+# Open http://localhost:5000
+```
 
-# Open in browser
-# http://localhost:5000
+**With Docker:**
+```bash
+docker run -p 5000:5000 trace-analyzer
+# or
+docker-compose up
+# Open http://localhost:5000
 ```
 
 Then:
@@ -25,7 +41,7 @@ Then:
 2. Click "Analyze"
 3. View beautiful interactive results!
 
-#### Method B: Command Line
+#### Method B: Command Line (Python only)
 
 ```bash
 # Analyze and generate markdown report
@@ -38,12 +54,13 @@ cat trace_analysis.md
 ### Step 3: Explore Results
 
 The analysis shows:
-- 📊 **Incoming Requests**: What endpoints each service receives
-- 🔗 **Service Calls**: Which services call each other
-- ⏱️ **Performance**: Total time spent on each endpoint
+- 📊 **Incoming Requests**: What HTTP endpoints each service receives
+- 🔗 **Service Calls**: Which services call each other via HTTP
+- 📨 **Kafka Operations**: Message consumer/producer operations and processing
+- ⏱️ **Performance**: Total time spent on each endpoint/operation
 - 📈 **Statistics**: Request counts and timing data
 
-**Everything sorted by total time** - see your slowest endpoints first!
+**Everything sorted by total time** - see your slowest operations first!
 
 ## 🌐 Web Interface Features
 
@@ -51,6 +68,7 @@ The analysis shows:
 - **Search & Filter**: Find specific endpoints quickly
 - **Responsive Design**: Works on desktop and mobile
 - **REST API**: Programmatic access for automation
+- **Sortable Tables**: Click column headers to sort by time or count
 
 ## 📝 CLI Features
 
@@ -62,9 +80,11 @@ The analysis shows:
 ## 💡 Pro Tips
 
 1. **Large Files**: The tool uses streaming parsing - no file size limits!
-2. **Automation**: Use the REST API to integrate with CI/CD pipelines
-3. **Analysis**: Focus on endpoints with highest total time for optimization
-4. **Service Dependencies**: Check the Service-to-Service calls section
+2. **Docker**: Use `docker-compose up` for fastest deployment
+3. **Automation**: Use the REST API to integrate with CI/CD pipelines
+4. **Analysis**: Focus on endpoints with highest total time for optimization
+5. **Service Dependencies**: Check the Service-to-Service calls section
+6. **Query Parameters**: Use `--keep-query-params` flag to preserve URL query strings
 
 ## 🆘 Need Help?
 
@@ -73,5 +93,6 @@ Check the full [README.md](README.md) for detailed documentation on:
 - API endpoints
 - Configuration options
 - Parameter detection rules
+- Docker deployment
 - Performance details
 

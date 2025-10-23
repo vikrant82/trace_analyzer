@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Flask Web Application for Trace Endpoint Analyzer
-Provides both a web UI and REST API endpoints for analyzing trace files.
+Provides both a web UI and REST API endpoints for analyzing HTTP and Kafka trace operations.
 """
 
 from flask import Flask, render_template, request, jsonify, send_file
@@ -162,8 +162,37 @@ def prepare_results(analyzer):
     
     service_calls_list.sort(key=lambda x: -x['total_time_ms'])
     
+    kafka_by_service = defaultdict(list)
+    for (service, operation, message_type, details), stats in analyzer.kafka_messages.items():
+        kafka_by_service[service].append({
+            'operation': operation,
+            'message_type': message_type,
+            'details': details,
+            'count': stats['count'],
+            'total_time_ms': stats['total_time_ms'],
+            'total_time_formatted': analyzer.format_time(stats['total_time_ms'])
+        })
+    
+    kafka_services_list = []
+    for service, operations in kafka_by_service.items():
+        operations.sort(key=lambda x: -x['total_time_ms'])
+        total_count = sum(op['count'] for op in operations)
+        total_time = sum(op['total_time_ms'] for op in operations)
+        
+        kafka_services_list.append({
+            'service': service,
+            'total_operations': total_count,
+            'total_time_ms': total_time,
+            'total_time_formatted': analyzer.format_time(total_time),
+            'operations': operations
+        })
+    
+    kafka_services_list.sort(key=lambda x: -x['total_time_ms'])
+    
     total_requests = sum(stats['count'] for stats in analyzer.endpoint_params.values())
     total_time_ms = sum(stats['total_time_ms'] for stats in analyzer.endpoint_params.values())
+    total_kafka_ops = sum(stats['count'] for stats in analyzer.kafka_messages.values())
+    total_kafka_time = sum(stats['total_time_ms'] for stats in analyzer.kafka_messages.values())
     
     return {
         'summary': {
@@ -172,13 +201,17 @@ def prepare_results(analyzer):
             'total_time_formatted': analyzer.format_time(total_time_ms),
             'unique_services': len(services_data),
             'unique_endpoints': len(set((k[0], k[1]) for k in analyzer.endpoint_params.keys())),
-            'unique_combinations': len(analyzer.endpoint_params)
+            'unique_combinations': len(analyzer.endpoint_params),
+            'total_kafka_operations': total_kafka_ops,
+            'total_kafka_time_ms': total_kafka_time,
+            'total_kafka_time_formatted': analyzer.format_time(total_kafka_time)
         },
         'services': {
             'summary': services_summary,
             'details': dict(services_data)
         },
-        'service_calls': service_calls_list
+        'service_calls': service_calls_list,
+        'kafka_operations': kafka_services_list
     }
 
 
