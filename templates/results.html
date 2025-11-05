@@ -7,6 +7,49 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    {% macro render_trace_node(node, loop_index, total_trace_time) %}
+    <li class="{{ 'collapsible' if node.children }}" data-state="{{ 'expanded' if node.children else '' }}">
+        <div class="node-content">
+            <div class="node-main">
+                {% if node.children %}
+                <span class="toggle"></span>
+                {% endif %}
+                <span class="node-prefix">{{ loop_index }}.</span>
+                <span class="node-service">{{ node.service_name }}</span>
+                <span class="node-name">
+                    {% if node.aggregated %}
+                        <span class="http-method">{{ node.http_method }}</span> {{ node.span.name }}
+                    {% else %}
+                        {{ node.span.name }}
+                    {% endif %}
+                </span>
+            </div>
+            <div class="node-metrics">
+                {% if node.aggregated %}
+                <span class="metric count"><strong>Count:</strong> {{ node.count }}</span>
+                <span class="metric avg-time"><strong>Avg:</strong> {{ "%.2f"|format(node.avg_time_ms) }} ms</span>
+                {% endif %}
+                
+                {% set total_perc = (node.total_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
+                <span class="metric total-time">
+                    <strong>Total:</strong> {{ "%.2f"|format(node.total_time_ms) }} ms ({{ "%.1f"|format(total_perc) }}%)
+                </span>
+                
+                {% set self_perc = (node.self_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
+                <span class="metric self-time">
+                    <strong>Self:</strong> {{ "%.2f"|format(node.self_time_ms) }} ms ({{ "%.1f"|format(self_perc) }}%)
+                </span>
+            </div>
+        </div>
+        {% if node.children %}
+        <ul>
+            {% for child in node.children %}
+            {{ render_trace_node(child, loop.index, total_trace_time) }}
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </li>
+    {% endmacro %}
     <div class="container">
         <header>
             <h1>📊 Analysis Results</h1>
@@ -35,6 +78,10 @@
                         <div class="stat-value">{{ results.summary.unique_combinations }}</div>
                         <div class="stat-label">Endpoint Combinations</div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{{ results.summary.total_traces }}</div>
+                        <div class="stat-label">Total Traces</div>
+                    </div>
                     {% if results.summary.total_kafka_operations > 0 %}
                     <div class="stat-card">
                         <div class="stat-value">{{ results.summary.total_kafka_operations }}</div>
@@ -58,6 +105,7 @@
                                     <th>Service Name</th>
                                     <th class="sortable" data-sort="number">Requests <span class="sort-icon"></span></th>
                                     <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
                                     <th class="sortable" data-sort="number">Unique Endpoints <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
@@ -69,6 +117,7 @@
                                 </td>
                                 <td>{{ service.request_count }}</td>
                                 <td class="time-cell">{{ service.total_time_formatted }}</td>
+                                <td class="time-cell">{{ service.total_self_time_formatted }}</td>
                                 <td>{{ service.unique_combinations }}</td>
                             </tr>
                             {% endfor %}
@@ -88,6 +137,7 @@
                     <div class="service-stats">
                         <span><strong>Requests:</strong> {{ service.request_count }}</span>
                         <span><strong>Total Time:</strong> {{ service.total_time_formatted }}</span>
+                        <span><strong>Self Time:</strong> {{ service.total_self_time_formatted }}</span>
                         <span><strong>Unique:</strong> {{ service.unique_combinations }}</span>
                     </div>
                     
@@ -99,12 +149,13 @@
                                     <th>Parameter Value</th>
                                     <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
                                     <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for endpoint in results.services.details[service.name] %}
                                 <tr>
-                                    <td class="endpoint-cell">{{ endpoint.endpoint }}</td>
+                                    <td class="endpoint-cell"><span class="http-method">{{ endpoint.http_method }}</span> {{ endpoint.endpoint }}</td>
                                     <td class="param-cell">
                                         {% if endpoint.parameter|length > 50 %}
                                             <span title="{{ endpoint.parameter }}">{{ endpoint.parameter[:47] }}...</span>
@@ -114,6 +165,7 @@
                                     </td>
                                     <td>{{ endpoint.count }}</td>
                                     <td class="time-cell">{{ endpoint.total_time_formatted }}</td>
+                                    <td class="time-cell">{{ endpoint.total_self_time_formatted }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -135,6 +187,7 @@
                     <div class="service-stats">
                         <span><strong>Total Calls:</strong> {{ call_pair.total_calls }}</span>
                         <span><strong>Total Time:</strong> {{ call_pair.total_time_formatted }}</span>
+                        <span><strong>Self Time:</strong> {{ call_pair.total_self_time_formatted }}</span>
                         <span><strong>Unique Endpoints:</strong> {{ call_pair.calls|length }}</span>
                     </div>
                     
@@ -146,12 +199,13 @@
                                     <th>Parameter Value</th>
                                     <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
                                     <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for call in call_pair.calls %}
                                 <tr>
-                                    <td class="endpoint-cell">{{ call.endpoint }}</td>
+                                    <td class="endpoint-cell"><span class="http-method">{{ call.http_method }}</span> {{ call.endpoint }}</td>
                                     <td class="param-cell">
                                         {% if call.parameter|length > 50 %}
                                             <span title="{{ call.parameter }}">{{ call.parameter[:47] }}...</span>
@@ -161,6 +215,7 @@
                                     </td>
                                     <td>{{ call.count }}</td>
                                     <td class="time-cell">{{ call.total_time_formatted }}</td>
+                                    <td class="time-cell">{{ call.total_self_time_formatted }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -222,6 +277,38 @@
             {% endif %}
         </main>
 
+        <!-- Section 4: Trace Hierarchy (New) -->
+        {% if results.trace_hierarchies %}
+        <section class="trace-hierarchy-section">
+            <h2>Trace Hierarchy</h2>
+            <p class="section-note">Hierarchical view of each trace, showing self-time and aggregated calls.</p>
+            <div class="hierarchy-controls">
+                <button class="btn btn-sm btn-expand-all">Expand All</button>
+                <button class="btn btn-sm btn-collapse-all">Collapse All</button>
+            </div>
+            
+            {% for trace_id, hierarchy in results.trace_hierarchies.items() %}
+            <div class="trace-detail">
+                <div class="trace-header">
+                    <h3>Trace ID: <span class="trace-id">{{ trace_id }}</span></h3>
+                    <div class="trace-summary-stats">
+                        <span><strong>Wall-Clock Duration:</strong> {{ results.trace_summary[trace_id].wall_clock_duration_formatted }}</span>
+                        <span><strong>Total Spans:</strong> {{ results.trace_summary[trace_id].span_count }}</span>
+                    </div>
+                </div>
+
+                <div class="tree">
+                    <ul>
+                        {% for node in hierarchy.children %}
+                        {{ render_trace_node(node, loop.index, results.trace_summary[trace_id].wall_clock_duration_ms) }}
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+
         <footer>
             <a href="/" class="btn btn-primary">Analyze Another File</a>
             <p style="text-align: center; margin-top: 20px; font-size: 0.9em;">
@@ -231,22 +318,46 @@
     </div>
 
     <script>
-        // Table sorting functionality
         document.addEventListener('DOMContentLoaded', function() {
+            // Table sorting functionality
             const tables = document.querySelectorAll('.sortable-table');
-            
             tables.forEach(table => {
                 const headers = table.querySelectorAll('th.sortable');
-                
                 headers.forEach(header => {
                     header.addEventListener('click', () => {
-                        // Get the actual column index in the table
                         const allHeaders = Array.from(table.querySelectorAll('th'));
                         const columnIndex = allHeaders.indexOf(header);
                         sortTable(table, columnIndex, header.dataset.sort);
                     });
                 });
             });
+
+            // Trace hierarchy collapse/expand functionality
+            const hierarchySection = document.querySelector('.trace-hierarchy-section');
+            if (hierarchySection) {
+                hierarchySection.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('toggle')) {
+                        const parentLi = e.target.closest('li.collapsible');
+                        if (parentLi) {
+                            const currentState = parentLi.dataset.state;
+                            parentLi.dataset.state = currentState === 'expanded' ? 'collapsed' : 'expanded';
+                        }
+                    }
+                });
+
+                const expandAllBtn = hierarchySection.querySelector('.btn-expand-all');
+                const collapseAllBtn = hierarchySection.querySelector('.btn-collapse-all');
+
+                expandAllBtn.addEventListener('click', () => {
+                    const allCollapsible = hierarchySection.querySelectorAll('li.collapsible');
+                    allCollapsible.forEach(li => li.dataset.state = 'expanded');
+                });
+
+                collapseAllBtn.addEventListener('click', () => {
+                    const allCollapsible = hierarchySection.querySelectorAll('li.collapsible');
+                    allCollapsible.forEach(li => li.dataset.state = 'collapsed');
+                });
+            }
         });
 
         function sortTable(table, columnIndex, sortType) {
@@ -336,4 +447,3 @@
     </script>
 </body>
 </html>
-
