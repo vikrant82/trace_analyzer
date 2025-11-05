@@ -514,3 +514,190 @@ footer a:hover {
     }
 }
 
+
+/* Section 4: Trace Hierarchy */
+.trace-hierarchy-section {
+    background-color: #ffffff;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    margin-bottom: 30px;
+}
+
+.trace-detail {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    margin-bottom: 25px;
+    overflow: hidden;
+}
+
+.trace-header {
+    background-color: #f7f7f7;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.trace-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.trace-id {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #e9e9e9;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #555;
+}
+
+.trace-summary-stats {
+    font-size: 0.95em;
+    color: #555;
+}
+
+.trace-summary-stats span {
+    margin-left: 20px;
+}
+
+.tree {
+    padding: 20px;
+}
+
+.tree ul {
+    list-style-type: none;
+    padding-left: 25px;
+    margin: 0;
+    position: relative;
+}
+
+.tree ul::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: #d1d1d1;
+}
+
+.tree li {
+    padding: 8px 0;
+    position: relative;
+}
+
+.tree li::before {
+    content: '';
+    position: absolute;
+    left: -25px;
+    top: 18px;
+    width: 25px;
+    height: 1px;
+    background-color: #d1d1d1;
+}
+
+.node-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.node-main {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.node-prefix {
+    color: #888;
+    font-size: 0.9em;
+    min-width: 25px;
+}
+
+.node-service {
+    font-weight: 600;
+    color: #0056b3;
+}
+
+.node-name {
+    margin-left: 8px;
+    color: #333;
+}
+
+.node-name:before {
+    content: '→';
+    margin-right: 8px;
+    color: #888;
+}
+
+.node-metrics {
+    display: flex;
+    align-items: center;
+    font-size: 0.9em;
+    color: #555;
+    padding-left: 25px; /* Align with prefix */
+}
+
+.node-metrics .metric {
+    margin-right: 15px;
+    background-color: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.node-metrics .metric strong {
+    color: #444;
+}
+
+.hierarchy-controls {
+    margin-bottom: 1.5rem;
+    display: flex;
+    gap: 10px;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+.tree li.collapsible > .node-content .node-main {
+    cursor: pointer;
+}
+
+.toggle {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    margin-right: 5px;
+    position: relative;
+    cursor: pointer;
+}
+
+.toggle::before {
+    content: '▶';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 10px;
+    color: #666;
+    transition: transform 0.2s;
+}
+
+li[data-state="expanded"] > .node-content .toggle::before {
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+li[data-state="collapsed"] > ul {
+    display: none;
+}
+
+.http-method {
+    font-weight: bold;
+    margin-right: 10px;
+    color: #94a3b8;
+}

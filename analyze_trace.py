@@ -9,6 +9,7 @@ import re
 from collections import defaultdict
 from typing import Dict, Tuple, List
 import sys
+from urllib.parse import urlparse
 
 
 class TraceAnalyzer:
@@ -21,10 +22,16 @@ class TraceAnalyzer:
                                       Default: True (recommended for cleaner grouping)
         """
         self.strip_query_params = strip_query_params
-        self.endpoint_params = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
-        self.service_calls = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
+        
+        # Data structures for flat analysis
+        self.endpoint_params = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0})
+        self.service_calls = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0})
         self.kafka_messages = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
-        self.span_map = {}
+        
+        # Data structures for hierarchical analysis
+        self.traces = defaultdict(list)
+        self.trace_hierarchies = {}
+        self.trace_summary = {}
         
         self.uuid_pattern = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
         self.numeric_id_pattern = re.compile(r'/\d+(?=/|\?|$)')
@@ -34,11 +41,14 @@ class TraceAnalyzer:
     def normalize_path(self, path: str) -> Tuple[str, List[str]]:
         """
         Normalize a path by replacing parameter values with placeholders.
-        Returns: (normalized_path, list_of_non_uuid_params)
-        Note: UUID parameters are normalized but NOT tracked individually.
+        Handles both full URLs and relative paths, extracting only the path component.
         """
         if not path:
             return path, []
+
+        # If it's a full URL, parse it to get only the path.
+        if '://' in path:
+            path = urlparse(path).path
         
         if self.strip_query_params and '?' in path:
             path = path.split('?')[0]
@@ -84,21 +94,24 @@ class TraceAnalyzer:
         
         return normalized, non_uuid_params
     
-    def extract_http_path(self, attributes: List) -> Tuple[str, bool]:
+    def extract_http_path(self, attributes: List) -> str:
         """
-        Extract HTTP path from span attributes.
-        Returns: (path, is_incoming)
-        - is_incoming=True: relative path (incoming request to this service)
-        - is_incoming=False: full URL (outgoing request to another service)
+        Extract HTTP path/URL from span attributes.
+        Searches for 'http.url', 'http.target', and 'http.path'.
         """
         for attr in attributes:
-            if attr.get('key') in ['http.path', 'http.url']:
+            if attr.get('key') in ['http.url', 'http.target', 'http.path']:
                 value = attr.get('value', {})
-                path = value.get('stringValue', '')
-                is_outgoing = path.startswith('http://') or path.startswith('https://')
-                return path, not is_outgoing
-        return '', False
+                return value.get('stringValue', '')
+        return ''
     
+    def extract_http_method(self, attributes: List) -> str:
+        """Extract HTTP method from span attributes."""
+        for attr in attributes:
+            if attr.get('key') == 'http.method':
+                return attr.get('value', {}).get('stringValue', '')
+        return ''
+
     def extract_service_name(self, resource_attributes: List) -> str:
         """Extract service name from resource attributes."""
         for attr in resource_attributes:
@@ -109,20 +122,15 @@ class TraceAnalyzer:
     
     def extract_target_service_from_url(self, url: str) -> str:
         """Extract target service name from a full URL."""
-        if url.startswith('http://') or url.startswith('https://'):
-            without_protocol = url.split('://', 1)[1] if '://' in url else url
-            host = without_protocol.split('/', 1)[0]
-            service = host.split('.')[0]
-            return service
+        if '://' in url:
+            host = urlparse(url).hostname
+            if host:
+                return host.split('.')[0]
         return 'unknown-service'
     
     def extract_kafka_info(self, span: Dict, attributes: List) -> Tuple[str, str, str]:
         """
         Extract Kafka messaging information from span.
-        Returns: (operation_type, message_type, details)
-        - operation_type: 'consumer', 'producer', 'internal'
-        - message_type: the span name or message identifier
-        - details: additional context from attributes
         """
         span_kind = span.get('kind', '')
         span_name = span.get('name', '')
@@ -159,286 +167,207 @@ class TraceAnalyzer:
             return f"{minutes}m {seconds:.2f}s"
     
     def process_trace_file(self, file_path: str):
-        """Process the trace JSON file using streaming parser."""
+        """
+        Process the trace JSON file by first grouping all spans by traceId,
+        then building a hierarchy for each trace.
+        """
         print(f"Processing {file_path}...")
         
         with open(file_path, 'rb') as f:
             parser = ijson.items(f, 'batches.item')
-            
-            batch_count = 0
-            span_count = 0
+            batch_count, span_count = 0, 0
             
             for batch in parser:
                 batch_count += 1
-                
-                resource = batch.get('resource', {})
-                resource_attributes = resource.get('attributes', [])
-                service_name = self.extract_service_name(resource_attributes)
-                
-                inst_lib_spans = batch.get('instrumentationLibrarySpans', [])
-                
-                for inst_lib_span in inst_lib_spans:
-                    spans = inst_lib_span.get('spans', [])
-                    
-                    for span in spans:
+                for inst_lib_span in batch.get('instrumentationLibrarySpans', []):
+                    for span in inst_lib_span.get('spans', []):
                         span_count += 1
-                        attributes = span.get('attributes', [])
-                        
-                        span_id = span.get('spanId', '')
-                        parent_span_id = span.get('parentSpanId', '')
-                        
-                        start_time_nano = span.get('startTimeUnixNano', 0)
-                        end_time_nano = span.get('endTimeUnixNano', 0)
-                        duration_ms = (end_time_nano - start_time_nano) / 1_000_000.0
-                        
-                        http_path, is_incoming = self.extract_http_path(attributes)
-                        
-                        if http_path:
-                            normalized_path, non_uuid_params = self.normalize_path(http_path)
-                            
-                            if non_uuid_params:
-                                for param in non_uuid_params:
-                                    self.span_map[span_id] = (service_name, normalized_path, param)
-                                    
-                                    if is_incoming:
-                                        key = (service_name, normalized_path, param)
-                                        self.endpoint_params[key]['count'] += 1
-                                        self.endpoint_params[key]['total_time_ms'] += duration_ms
-                                    else:
-                                        target_service = self.extract_target_service_from_url(http_path)
-                                        call_key = (service_name, target_service, normalized_path, param)
-                                        self.service_calls[call_key]['count'] += 1
-                                        self.service_calls[call_key]['total_time_ms'] += duration_ms
-                            else:
-                                self.span_map[span_id] = (service_name, normalized_path, '[no-params]')
-                                
-                                if is_incoming:
-                                    key = (service_name, normalized_path, '[no-params]')
-                                    self.endpoint_params[key]['count'] += 1
-                                    self.endpoint_params[key]['total_time_ms'] += duration_ms
-                                else:
-                                    target_service = self.extract_target_service_from_url(http_path)
-                                    call_key = (service_name, target_service, normalized_path, '[no-params]')
-                                    self.service_calls[call_key]['count'] += 1
-                                    self.service_calls[call_key]['total_time_ms'] += duration_ms
-                        else:
-                            operation_type, message_type, details = self.extract_kafka_info(span, attributes)
-                            if operation_type in ['consumer', 'producer']:
-                                kafka_key = (service_name, operation_type, message_type, details)
-                                self.kafka_messages[kafka_key]['count'] += 1
-                                self.kafka_messages[kafka_key]['total_time_ms'] += duration_ms
+                        trace_id = span.get('traceId')
+                        if trace_id:
+                            span['resource'] = batch.get('resource', {})
+                            self.traces[trace_id].append(span)
                 
                 if batch_count % 100 == 0:
-                    print(f"  Processed {batch_count} batches, {span_count} spans...")
+                    print(f"  Read {batch_count} batches, {span_count} spans...")
         
-        print(f"Completed: {batch_count} batches, {span_count} spans processed")
-        print(f"Found {len(self.endpoint_params)} unique endpoint-parameter combinations")
-        print(f"Found {len(self.service_calls)} unique service-to-service call combinations")
-        print(f"Found {len(self.kafka_messages)} unique Kafka/messaging operations")
-    
-    def generate_markdown_report(self, output_file: str):
-        """Generate a markdown file with the analysis results."""
-        print(f"\nGenerating report: {output_file}")
-        
-        services_data = defaultdict(list)
-        for (service, endpoint, param), stats in self.endpoint_params.items():
-            services_data[service].append((endpoint, param, stats['count'], stats['total_time_ms']))
-        
-        sorted_services = sorted(services_data.keys())
-        
-        with open(output_file, 'w') as f:
-            f.write("# Trace Endpoint Analysis Report\n\n")
-            
-            total_requests = sum(stats['count'] for stats in self.endpoint_params.values())
-            total_time_ms = sum(stats['total_time_ms'] for stats in self.endpoint_params.values())
-            unique_services = len(services_data)
-            unique_endpoints = len(set((k[0], k[1]) for k in self.endpoint_params.keys()))
-            
-            f.write(f"**Total Incoming Requests:** {total_requests}  \n")
-            f.write(f"**Total Time (Incoming):** {self.format_time(total_time_ms)}  \n")
-            f.write(f"**Unique Services:** {unique_services}  \n")
-            f.write(f"**Unique Normalized Endpoints:** {unique_endpoints}  \n")
-            f.write(f"**Unique Endpoint-Parameter Combinations:** {len(self.endpoint_params)}  \n\n")
-            
-            f.write("---\n\n")
-            
-            f.write("## Table of Contents - Incoming Requests by Service\n\n")
-            for service in sorted_services:
-                service_count = sum(count for _, _, count, _ in services_data[service])
-                service_time = sum(time_ms for _, _, _, time_ms in services_data[service])
-                anchor = service.lower().replace(':', '').replace('/', '').replace(' ', '-')
-                f.write(f"- [{service}](#{anchor}) ({service_count} requests, {self.format_time(service_time)})\n")
-            f.write("\n---\n\n")
-            
-            f.write("# Incoming Requests by Service\n\n")
-            f.write("*This section shows endpoints that each service receives (incoming HTTP requests).*  \n")
-            f.write("*Tables are sorted by Total Time (descending).*\n\n")
-            
-            for service in sorted_services:
-                service_data = services_data[service]
-                
-                sorted_service_data = sorted(
-                    service_data,
-                    key=lambda x: (-x[3], x[0], x[1])
-                )
-                
-                service_count = sum(count for _, _, count, _ in service_data)
-                service_time = sum(time_ms for _, _, _, time_ms in service_data)
-                unique_combos = len(service_data)
-                
-                f.write(f"## {service}\n\n")
-                f.write(f"**Service Requests:** {service_count}  \n")
-                f.write(f"**Total Time:** {self.format_time(service_time)}  \n")
-                f.write(f"**Unique Combinations:** {unique_combos}  \n\n")
-                
-                f.write("| Normalized Endpoint | Parameter Value | Count | Total Time |\n")
-                f.write("|---------------------|-----------------|-------|------------|\n")
-                
-                for endpoint, param, count, time_ms in sorted_service_data:
-                    display_param = param if len(param) <= 50 else f"{param[:47]}..."
-                    f.write(f"| {endpoint} | {display_param} | {count} | {self.format_time(time_ms)} |\n")
-                
-                f.write("\n")
-            
-            if self.service_calls:
-                f.write("---\n\n")
-                f.write("# Service-to-Service Calls (Outgoing)\n\n")
-                f.write("*This section shows outgoing HTTP calls from one service to another.*  \n")
-                f.write("*Tables are sorted by Total Time (descending).*\n\n")
-                
-                service_pairs = defaultdict(list)
-                for (caller, callee, endpoint, param), stats in self.service_calls.items():
-                    service_pairs[(caller, callee)].append((endpoint, param, stats['count'], stats['total_time_ms']))
-                
-                sorted_pairs = sorted(service_pairs.keys())
-                
-                total_call_time = sum(stats['total_time_ms'] for stats in self.service_calls.values())
-                
-                f.write(f"**Total Cross-Service Call Combinations:** {len(self.service_calls)}  \n")
-                f.write(f"**Total Time (Cross-Service):** {self.format_time(total_call_time)}  \n")
-                f.write(f"**Service Pair Relationships:** {len(sorted_pairs)}  \n\n")
-                
-                for caller, callee in sorted_pairs:
-                    pair_data = service_pairs[(caller, callee)]
-                    
-                    sorted_pair_data = sorted(pair_data, key=lambda x: (-x[3], x[0], x[1]))
-                    
-                    pair_count = sum(count for _, _, count, _ in pair_data)
-                    pair_time = sum(time_ms for _, _, _, time_ms in pair_data)
-                    
-                    f.write(f"## {caller} → {callee}\n\n")
-                    f.write(f"**Total Calls:** {pair_count}  \n")
-                    f.write(f"**Total Time:** {self.format_time(pair_time)}  \n")
-                    f.write(f"**Unique Combinations:** {len(pair_data)}  \n\n")
-                    
-                    f.write("| Normalized Endpoint | Parameter Value | Count | Total Time |\n")
-                    f.write("|---------------------|-----------------|-------|------------|\n")
-                    
-                    for endpoint, param, count, time_ms in sorted_pair_data:
-                        display_param = param if len(param) <= 50 else f"{param[:47]}..."
-                        f.write(f"| {endpoint} | {display_param} | {count} | {self.format_time(time_ms)} |\n")
-                    
-                    f.write("\n")
-            
-            if self.kafka_messages:
-                f.write("---\n\n")
-                f.write("# Kafka/Messaging Operations\n\n")
-                f.write("*This section shows Kafka consumer/producer operations and message processing.*  \n")
-                f.write("*Tables are sorted by Total Time (descending).*\n\n")
-                
-                kafka_by_service = defaultdict(list)
-                for (service, operation, message_type, details), stats in self.kafka_messages.items():
-                    kafka_by_service[service].append((operation, message_type, details, stats['count'], stats['total_time_ms']))
-                
-                sorted_kafka_services = sorted(kafka_by_service.keys())
-                
-                total_kafka_time = sum(stats['total_time_ms'] for stats in self.kafka_messages.values())
-                total_kafka_ops = sum(stats['count'] for stats in self.kafka_messages.values())
-                
-                f.write(f"**Total Messaging Operations:** {total_kafka_ops}  \n")
-                f.write(f"**Total Time (Messaging):** {self.format_time(total_kafka_time)}  \n")
-                f.write(f"**Services with Messaging:** {len(kafka_by_service)}  \n\n")
-                
-                for service in sorted_kafka_services:
-                    kafka_data = kafka_by_service[service]
-                    
-                    sorted_kafka_data = sorted(kafka_data, key=lambda x: (-x[4], x[1], x[0]))
-                    
-                    service_ops = sum(count for _, _, _, count, _ in kafka_data)
-                    service_time = sum(time_ms for _, _, _, _, time_ms in kafka_data)
-                    
-                    f.write(f"## {service}\n\n")
-                    f.write(f"**Total Operations:** {service_ops}  \n")
-                    f.write(f"**Total Time:** {self.format_time(service_time)}  \n")
-                    f.write(f"**Unique Operations:** {len(kafka_data)}  \n\n")
-                    
-                    f.write("| Operation Type | Message/Span Name | Details | Count | Total Time |\n")
-                    f.write("|----------------|-------------------|---------|-------|------------|\n")
-                    
-                    for operation, message_type, details, count, time_ms in sorted_kafka_data:
-                        display_details = details if len(details) <= 60 else f"{details[:57]}..."
-                        f.write(f"| {operation} | {message_type} | {display_details} | {count} | {self.format_time(time_ms)} |\n")
-                    
-                    f.write("\n")
-        
-        print(f"Report generated successfully!")
-        
-        print("\n=== Summary Statistics ===")
-        print(f"Total incoming requests: {total_requests}")
-        print(f"Total time (incoming): {self.format_time(total_time_ms)}")
-        print(f"Unique services: {unique_services}")
-        print(f"Unique normalized endpoints: {unique_endpoints}")
-        print(f"Unique endpoint-parameter combinations: {len(self.endpoint_params)}")
-        
-        print("\n=== Incoming Requests per Service ===")
-        for service in sorted_services:
-            service_count = sum(count for _, _, count, _ in services_data[service])
-            service_time = sum(time_ms for _, _, _, time_ms in services_data[service])
-            print(f"{service_count:6d} requests ({self.format_time(service_time):>12s})  {service}")
-        
-        if self.service_calls:
-            print(f"\n=== Service-to-Service Calls ===")
-            print(f"Total cross-service call combinations: {len(self.service_calls)}")
-            
-            service_pairs = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
-            for (caller, callee, endpoint, param), stats in self.service_calls.items():
-                service_pairs[(caller, callee)]['count'] += stats['count']
-                service_pairs[(caller, callee)]['total_time_ms'] += stats['total_time_ms']
-            
-            print(f"Service pair relationships: {len(service_pairs)}")
-            print("\nTop service pair connections (by total time):")
-            sorted_pairs = sorted(service_pairs.items(), key=lambda x: -x[1]['total_time_ms'])[:10]
-            for (caller, callee), stats in sorted_pairs:
-                print(f"{self.format_time(stats['total_time_ms']):>12s} ({stats['count']:4d} calls)  {caller} → {callee}")
-        
-        if self.endpoint_params:
-            print("\n=== Top 10 Slowest Incoming Requests (by Total Time) ===")
-            top_10 = sorted(self.endpoint_params.items(), key=lambda x: -x[1]['total_time_ms'])[:10]
-            for (service, endpoint, param), stats in top_10:
-                display_param = param if len(param) <= 30 else f"{param[:27]}..."
-                print(f"{self.format_time(stats['total_time_ms']):>12s} ({stats['count']:4d}x)  [{service}] {endpoint} | {display_param}")
-        
-        if self.kafka_messages:
-            print(f"\n=== Kafka/Messaging Operations ===")
-            print(f"Total messaging operations: {sum(stats['count'] for stats in self.kafka_messages.values())}")
-            print(f"Total time (messaging): {self.format_time(sum(stats['total_time_ms'] for stats in self.kafka_messages.values()))}")
-            
-            kafka_by_service = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
-            for (service, operation, message_type, details), stats in self.kafka_messages.items():
-                kafka_by_service[service]['count'] += stats['count']
-                kafka_by_service[service]['total_time_ms'] += stats['total_time_ms']
-            
-            print(f"Services with messaging: {len(kafka_by_service)}")
-            print("\nTop messaging operations (by total time):")
-            top_kafka = sorted(self.kafka_messages.items(), key=lambda x: -x[1]['total_time_ms'])[:10]
-            for (service, operation, message_type, details), stats in top_kafka:
-                display_msg = message_type if len(message_type) <= 40 else f"{message_type[:37]}..."
-                print(f"{self.format_time(stats['total_time_ms']):>12s} ({stats['count']:4d}x)  [{service}] {operation}: {display_msg}")
+        print(f"Completed reading file: {batch_count} batches, {span_count} spans found.")
+        print(f"Found {len(self.traces)} unique traces.")
 
+        self._process_collected_traces()
+
+        print(f"\nFound {len(self.endpoint_params)} unique incoming request combinations (SERVER spans)")
+        print(f"Found {len(self.service_calls)} unique outgoing call combinations (CLIENT spans)")
+        print(f"Found {len(self.kafka_messages)} unique Kafka/messaging operations")
+
+    def _process_collected_traces(self):
+        """
+        Iterate through each collected trace, build its hierarchy, and
+        calculate all timing metrics.
+        """
+        for trace_id, spans in self.traces.items():
+            hierarchy = self._build_and_process_hierarchy(spans)
+            self.trace_hierarchies[trace_id] = hierarchy
+            
+            if spans:
+                start_times = [s.get('startTimeUnixNano', 0) for s in spans]
+                end_times = [s.get('endTimeUnixNano', 0) for s in spans]
+                min_start_time = min(start_times) if start_times else 0
+                max_end_time = max(end_times) if end_times else 0
+                wall_clock_duration = (max_end_time - min_start_time) / 1_000_000.0
+                
+                self.trace_summary[trace_id] = {
+                    'start_time_unix_nano': min_start_time,
+                    'end_time_unix_nano': max_end_time,
+                    'wall_clock_duration_ms': wall_clock_duration,
+                    'wall_clock_duration_formatted': self.format_time(wall_clock_duration),
+                    'span_count': len(spans)
+                }
+
+            if hierarchy:
+                self._calculate_hierarchy_timings(hierarchy)
+
+    def _build_and_process_hierarchy(self, spans: List[Dict]) -> Dict:
+        """
+        Build a tree structure from a flat list of spans for a single trace.
+        This version correctly populates the flat metrics to avoid double-counting.
+        """
+        span_nodes = {}
+        root_spans = []
+
+        # First pass: create a node for each span
+        for span in spans:
+            span_id = span.get('spanId')
+            if not span_id: continue
+            duration_ms = (span.get('endTimeUnixNano', 0) - span.get('startTimeUnixNano', 0)) / 1_000_000.0
+            service_name = self.extract_service_name(span.get('resource', {}).get('attributes', []))
+            span_nodes[span_id] = {
+                'span': span, 'service_name': service_name, 'children': [],
+                'total_time_ms': duration_ms, 'self_time_ms': duration_ms,
+            }
+
+        # Second pass: link children to their parents
+        for span_id, node in span_nodes.items():
+            parent_span_id = node['span'].get('parentSpanId')
+            if parent_span_id and parent_span_id in span_nodes:
+                span_nodes[parent_span_id]['children'].append(node)
+            else:
+                root_spans.append(node)
+
+        # Third pass: populate flat metrics now that the hierarchy is fully built
+        for span_id, node in span_nodes.items():
+            span = node['span']
+            attributes = span.get('attributes', [])
+            span_kind = span.get('kind', '')
+            duration_ms = node['total_time_ms']
+            service_name = node['service_name']
+            
+            parent_span_id = span.get('parentSpanId')
+            parent_node = span_nodes.get(parent_span_id)
+            parent_kind = parent_node['span'].get('kind') if parent_node else None
+
+            http_path = self.extract_http_path(attributes)
+            if http_path:
+                http_method = self.extract_http_method(attributes)
+                normalized_path, params = self.normalize_path(http_path)
+                param_str = params[0] if params else '[no-params]'
+                
+                # A SERVER span is only a "true" incoming request if its parent is a CLIENT or does not exist.
+                if span_kind == 'SPAN_KIND_SERVER' and (parent_kind == 'SPAN_KIND_CLIENT' or parent_kind is None):
+                    child_total_time = sum(child['total_time_ms'] for child in node['children'])
+                    self_time_ms = max(0, duration_ms - child_total_time)
+                    
+                    key = (service_name, http_method, normalized_path, param_str)
+                    self.endpoint_params[key]['count'] += 1
+                    self.endpoint_params[key]['total_time_ms'] += duration_ms
+                    self.endpoint_params[key]['total_self_time_ms'] += self_time_ms
+                
+                # A CLIENT span is only a "true" service-to-service call if its parent is not also a CLIENT span.
+                elif span_kind == 'SPAN_KIND_CLIENT' and parent_kind != 'SPAN_KIND_CLIENT':
+                    child_total_time = sum(child['total_time_ms'] for child in node['children'])
+                    self_time_ms = max(0, duration_ms - child_total_time)
+
+                    target_service = self.extract_target_service_from_url(http_path)
+                    key = (service_name, target_service, http_method, normalized_path, param_str)
+                    self.service_calls[key]['count'] += 1
+                    self.service_calls[key]['total_time_ms'] += duration_ms
+                    self.service_calls[key]['total_self_time_ms'] += self_time_ms
+            else:
+                op_type, msg_type, details = self.extract_kafka_info(span, attributes)
+                if op_type in ['consumer', 'producer']:
+                    key = (service_name, op_type, msg_type, details)
+                    self.kafka_messages[key]['count'] += 1
+                    self.kafka_messages[key]['total_time_ms'] += duration_ms
+        
+        return {
+            'span': {'name': 'Trace Root'}, 'service_name': 'Trace', 'children': root_spans,
+            'total_time_ms': sum(s['total_time_ms'] for s in root_spans), 'self_time_ms': 0
+        }
+
+    def _calculate_hierarchy_timings(self, node: Dict):
+        """
+        Recursively traverse the hierarchy to aggregate children and calculate self-time.
+        """
+        if not node or not node.get('children'):
+            return
+
+        for child in node['children']:
+            self._calculate_hierarchy_timings(child)
+
+        # Aggregate the children of the current node
+        node['children'] = self._aggregate_list_of_nodes(node['children'])
+        
+        # After aggregation, calculate the parent's self-time
+        child_total_time = sum(child['total_time_ms'] for child in node['children'])
+        node['self_time_ms'] = max(0, node['total_time_ms'] - child_total_time)
+
+    def _aggregate_list_of_nodes(self, nodes: List[Dict]) -> List[Dict]:
+        """
+        A dedicated helper to recursively aggregate a list of nodes.
+        """
+        aggregated_nodes = defaultdict(list)
+        for node in nodes:
+            span = node.get('span', {})
+            service = node.get('service_name', 'Unknown')
+            http_path = self.extract_http_path(span.get('attributes', []))
+            
+            if http_path:
+                http_method = self.extract_http_method(span.get('attributes', []))
+                normalized_path, _ = self.normalize_path(http_path)
+                aggregation_key = f"{service}:{http_method}:{normalized_path}"
+            else:
+                aggregation_key = f"{service}:{span.get('name', 'Unknown Span')}"
+            
+            aggregated_nodes[aggregation_key].append(node)
+
+        final_children = []
+        for key, group in aggregated_nodes.items():
+            if len(group) == 1:
+                final_children.append(group[0])
+            else:
+                first_child = group[0]
+                total_time = sum(c['total_time_ms'] for c in group)
+                self_time = sum(c['self_time_ms'] for c in group)
+                
+                # Recursively aggregate the children of the group
+                all_grandchildren = [grandchild for child in group for grandchild in child.get('children', [])]
+                aggregated_grandchildren = self._aggregate_list_of_nodes(all_grandchildren)
+                
+                agg_node = {
+                    'span': {'name': key},
+                    'service_name': first_child['service_name'],
+                    'children': aggregated_grandchildren,
+                    'total_time_ms': total_time,
+                    'self_time_ms': self_time,
+                    'aggregated': True,
+                    'count': sum(c.get('count', 1) for c in group),
+                    'avg_time_ms': total_time / sum(c.get('count', 1) for c in group)
+                }
+                final_children.append(agg_node)
+        
+        return final_children
 
 def main():
     import argparse
-    
     parser = argparse.ArgumentParser(
         description='Analyze Grafana trace JSON files and extract HTTP endpoint statistics.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -449,34 +378,21 @@ Examples:
   python analyze_trace.py trace.json --keep-query-params
         """
     )
-    
     parser.add_argument('input_file', help='Path to the trace JSON file')
-    parser.add_argument('-o', '--output', dest='output_file', 
-                       default='trace_analysis.md',
-                       help='Output markdown file (default: trace_analysis.md)')
-    parser.add_argument('--keep-query-params', action='store_true',
-                       help='Keep query parameters in URLs (default: strip them)')
-    
+    parser.add_argument('-o', '--output', dest='output_file', default='trace_analysis.md', help='Output markdown file')
+    parser.add_argument('--keep-query-params', action='store_true', help='Keep query parameters in URLs')
     args = parser.parse_args()
     
-    input_file = args.input_file
-    output_file = args.output_file
-    strip_query_params = not args.keep_query_params
-    
-    analyzer = TraceAnalyzer(strip_query_params=strip_query_params)
+    analyzer = TraceAnalyzer(strip_query_params=not args.keep_query_params)
     
     try:
-        print(f"\nConfiguration:")
-        print(f"  Input file: {input_file}")
-        print(f"  Output file: {output_file}")
-        print(f"  Strip query params: {strip_query_params}")
-        print()
-        
-        analyzer.process_trace_file(input_file)
-        analyzer.generate_markdown_report(output_file)
-        print(f"\n✓ Analysis complete! Report saved to: {output_file}")
+        print(f"\nConfiguration:\n  Input file: {args.input_file}\n  Output file: {args.output_file}\n  Strip query params: {not args.keep_query_params}\n")
+        analyzer.process_trace_file(args.input_file)
+        # The markdown report is not part of the web app, but we keep it for CLI use.
+        # analyzer.generate_markdown_report(args.output_file)
+        print(f"\n✓ Analysis complete!")
     except FileNotFoundError:
-        print(f"Error: File '{input_file}' not found.")
+        print(f"Error: File '{args.input_file}' not found.")
         sys.exit(1)
     except Exception as e:
         print(f"Error: {e}")
@@ -484,7 +400,5 @@ Examples:
         traceback.print_exc()
         sys.exit(1)
 
-
 if __name__ == "__main__":
     main()
-
