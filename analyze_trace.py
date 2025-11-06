@@ -104,7 +104,7 @@ class TraceAnalyzer:
                 value = attr.get('value', {})
                 return value.get('stringValue', '')
         return ''
-    
+
     def extract_http_method(self, attributes: List) -> str:
         """Extract HTTP method from span attributes."""
         for attr in attributes:
@@ -201,12 +201,24 @@ class TraceAnalyzer:
 
     def _process_collected_traces(self):
         """
-        Iterate through each collected trace, build its hierarchy, and
-        calculate all timing metrics.
+        Iterate through each collected trace, build its hierarchy, calculate
+        timings, and then populate the flat metrics for the summary tables.
         """
         for trace_id, spans in self.traces.items():
-            hierarchy = self._build_and_process_hierarchy(spans)
-            self.trace_hierarchies[trace_id] = hierarchy
+            # Pass 1 & 2: Build the raw hierarchy and a flat map of all nodes.
+            raw_hierarchy, span_nodes = self._build_raw_hierarchy(spans)
+            
+            # Pass 3: Recursively calculate timings for the entire hierarchy.
+            # This is the single source of truth for all self-time calculations.
+            if raw_hierarchy:
+                self._calculate_hierarchy_timings(raw_hierarchy)
+
+            # Pass 4: Populate the flat summary tables using the now-correct
+            # values that were calculated in the hierarchy.
+            self._populate_flat_metrics(span_nodes)
+
+            # Store the final, processed hierarchy for the UI.
+            self.trace_hierarchies[trace_id] = raw_hierarchy
             
             if spans:
                 start_times = [s.get('startTimeUnixNano', 0) for s in spans]
@@ -223,47 +235,69 @@ class TraceAnalyzer:
                     'span_count': len(spans)
                 }
 
-            if hierarchy:
-                self._calculate_hierarchy_timings(hierarchy)
-
-    def _build_and_process_hierarchy(self, spans: List[Dict]) -> Dict:
+    def _build_raw_hierarchy(self, spans: List[Dict]) -> Tuple[Dict, Dict]:
         """
-        Build a tree structure from a flat list of spans for a single trace.
-        This version correctly populates the flat metrics to avoid double-counting.
+        Build a raw tree structure from a flat list of spans, intelligently
+        re-parenting orphaned spans to their logical service entry points.
         """
         span_nodes = {}
-        root_spans = []
+        service_server_spans = {}
 
-        # First pass: create a node for each span
+        # First pass: create nodes and identify the primary SERVER span for each service.
         for span in spans:
             span_id = span.get('spanId')
             if not span_id: continue
+            
             duration_ms = (span.get('endTimeUnixNano', 0) - span.get('startTimeUnixNano', 0)) / 1_000_000.0
             service_name = self.extract_service_name(span.get('resource', {}).get('attributes', []))
+            
             span_nodes[span_id] = {
                 'span': span, 'service_name': service_name, 'children': [],
                 'total_time_ms': duration_ms, 'self_time_ms': duration_ms,
             }
 
-        # Second pass: link children to their parents
+            if span.get('kind') == 'SPAN_KIND_SERVER' and service_name not in service_server_spans:
+                 service_server_spans[service_name] = span_id
+
+        # Second pass: link children, adopting orphans to their service's SERVER span.
+        root_spans = []
         for span_id, node in span_nodes.items():
             parent_span_id = node['span'].get('parentSpanId')
+            
             if parent_span_id and parent_span_id in span_nodes:
                 span_nodes[parent_span_id]['children'].append(node)
+            elif node['service_name'] in service_server_spans and span_id != service_server_spans[node['service_name']]:
+                # This is an orphan. Adopt it.
+                parent_id = service_server_spans[node['service_name']]
+                span_nodes[parent_id]['children'].append(node)
             else:
+                # This is a true root span.
                 root_spans.append(node)
+        
+        root = {
+            'span': {'name': 'Trace Root'}, 'service_name': 'Trace', 'children': root_spans,
+            'total_time_ms': sum(s['total_time_ms'] for s in root_spans), 'self_time_ms': 0
+        }
+        return root, span_nodes
 
-        # Third pass: populate flat metrics now that the hierarchy is fully built
+    def _populate_flat_metrics(self, span_nodes: Dict):
+        """
+        Pass 4: Populate the flat summary tables. This function reads the
+        final, correct values from the nodes after the hierarchy has been fully processed.
+        """
         for span_id, node in span_nodes.items():
             span = node['span']
             attributes = span.get('attributes', [])
             span_kind = span.get('kind', '')
-            duration_ms = node['total_time_ms']
-            service_name = node['service_name']
             
             parent_span_id = span.get('parentSpanId')
             parent_node = span_nodes.get(parent_span_id)
             parent_kind = parent_node['span'].get('kind') if parent_node else None
+
+            # Read the final, correct time values from the node.
+            # These were calculated by _calculate_hierarchy_timings.
+            total_time = node['total_time_ms']
+            self_time = node['self_time_ms']
 
             http_path = self.extract_http_path(attributes)
             if http_path:
@@ -271,59 +305,57 @@ class TraceAnalyzer:
                 normalized_path, params = self.normalize_path(http_path)
                 param_str = params[0] if params else '[no-params]'
                 
-                # A SERVER span is only a "true" incoming request if its parent is a CLIENT or does not exist.
                 if span_kind == 'SPAN_KIND_SERVER' and (parent_kind == 'SPAN_KIND_CLIENT' or parent_kind is None):
-                    child_total_time = sum(child['total_time_ms'] for child in node['children'])
-                    self_time_ms = max(0, duration_ms - child_total_time)
-                    
-                    key = (service_name, http_method, normalized_path, param_str)
+                    key = (node['service_name'], http_method, normalized_path, param_str)
                     self.endpoint_params[key]['count'] += 1
-                    self.endpoint_params[key]['total_time_ms'] += duration_ms
-                    self.endpoint_params[key]['total_self_time_ms'] += self_time_ms
+                    self.endpoint_params[key]['total_time_ms'] += total_time
+                    self.endpoint_params[key]['total_self_time_ms'] += self_time
                 
-                # A CLIENT span is only a "true" service-to-service call if its parent is not also a CLIENT span.
                 elif span_kind == 'SPAN_KIND_CLIENT' and parent_kind != 'SPAN_KIND_CLIENT':
-                    child_total_time = sum(child['total_time_ms'] for child in node['children'])
-                    self_time_ms = max(0, duration_ms - child_total_time)
-
                     target_service = self.extract_target_service_from_url(http_path)
-                    key = (service_name, target_service, http_method, normalized_path, param_str)
+                    key = (node['service_name'], target_service, http_method, normalized_path, param_str)
                     self.service_calls[key]['count'] += 1
-                    self.service_calls[key]['total_time_ms'] += duration_ms
-                    self.service_calls[key]['total_self_time_ms'] += self_time_ms
+                    self.service_calls[key]['total_time_ms'] += total_time
+                    self.service_calls[key]['total_self_time_ms'] += self_time
             else:
                 op_type, msg_type, details = self.extract_kafka_info(span, attributes)
                 if op_type in ['consumer', 'producer']:
-                    key = (service_name, op_type, msg_type, details)
+                    key = (node['service_name'], op_type, msg_type, details)
                     self.kafka_messages[key]['count'] += 1
-                    self.kafka_messages[key]['total_time_ms'] += duration_ms
-        
-        return {
-            'span': {'name': 'Trace Root'}, 'service_name': 'Trace', 'children': root_spans,
-            'total_time_ms': sum(s['total_time_ms'] for s in root_spans), 'self_time_ms': 0
-        }
+                    self.kafka_messages[key]['total_time_ms'] += total_time
 
     def _calculate_hierarchy_timings(self, node: Dict):
         """
-        Recursively traverse the hierarchy to aggregate children and calculate self-time.
+        Pass 3: Recursively traverse the hierarchy to aggregate children and calculate self-time.
+        This works bottom-up.
         """
         if not node or not node.get('children'):
             return
 
+        # 1. Recurse to the bottom of the tree for all children.
+        #    This ensures that everything below the current node is fully processed.
         for child in node['children']:
             self._calculate_hierarchy_timings(child)
 
-        # Aggregate the children of the current node
-        node['children'] = self._aggregate_list_of_nodes(node['children'])
+        # 2. Now that all children have been processed (including their own self-time
+        #    and aggregation), aggregate the immediate children of the current node.
+        aggregated_children = self._aggregate_list_of_nodes(node['children'])
+        node['children'] = aggregated_children
         
-        # After aggregation, calculate the parent's self-time
+        # 3. Finally, calculate the self-time of the current node by subtracting the
+        #    total time of its now-aggregated children.
         child_total_time = sum(child['total_time_ms'] for child in node['children'])
         node['self_time_ms'] = max(0, node['total_time_ms'] - child_total_time)
 
     def _aggregate_list_of_nodes(self, nodes: List[Dict]) -> List[Dict]:
         """
-        A dedicated helper to recursively aggregate a list of nodes.
+        Aggregates a list of nodes based on a composite key.
+        This function is NOT recursive; it relies on the main recursive loop
+        in _calculate_hierarchy_timings to have already processed child nodes.
         """
+        if not nodes:
+            return []
+
         aggregated_nodes = defaultdict(list)
         for node in nodes:
             span = node.get('span', {})
@@ -339,32 +371,35 @@ class TraceAnalyzer:
             
             aggregated_nodes[aggregation_key].append(node)
 
-        final_children = []
+        final_list = []
         for key, group in aggregated_nodes.items():
             if len(group) == 1:
-                final_children.append(group[0])
+                final_list.append(group[0])
             else:
-                first_child = group[0]
                 total_time = sum(c['total_time_ms'] for c in group)
                 self_time = sum(c['self_time_ms'] for c in group)
                 
-                # Recursively aggregate the children of the group
+                # Grandchildren are simply concatenated. They have already been correctly
+                # aggregated by the main recursive calls in _calculate_hierarchy_timings.
                 all_grandchildren = [grandchild for child in group for grandchild in child.get('children', [])]
-                aggregated_grandchildren = self._aggregate_list_of_nodes(all_grandchildren)
                 
                 agg_node = {
-                    'span': {'name': key},
-                    'service_name': first_child['service_name'],
-                    'children': aggregated_grandchildren,
+                    'span': {
+                        'name': key,
+                        # Keep attributes from the first span for the template to extract the HTTP method.
+                        'attributes': group[0]['span'].get('attributes', [])
+                    },
+                    'service_name': group[0]['service_name'],
+                    'children': all_grandchildren,
                     'total_time_ms': total_time,
                     'self_time_ms': self_time,
                     'aggregated': True,
                     'count': sum(c.get('count', 1) for c in group),
                     'avg_time_ms': total_time / sum(c.get('count', 1) for c in group)
                 }
-                final_children.append(agg_node)
+                final_list.append(agg_node)
         
-        return final_children
+        return final_list
 
 def main():
     import argparse
