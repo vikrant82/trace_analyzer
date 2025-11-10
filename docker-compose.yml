@@ -4,7 +4,7 @@ services:
   trace-analyzer:
     build: .
     ports:
-      - "5000:5000"
+      - "5000:5001"
     volumes:
       - ./uploads:/tmp
     environment:
