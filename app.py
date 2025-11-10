@@ -32,7 +32,11 @@ def index():
 def analyze_api():
     """
     API endpoint to analyze a trace file.
-    Accepts: multipart/form-data with 'file' field and optional 'strip_query_params' field
+    Accepts: multipart/form-data with fields:
+      - 'file': trace JSON file
+      - 'strip_query_params': 'true'|'false' (optional, default: 'true')
+      - 'include_gateway_services': 'true'|'false' (optional, default: 'false')
+      - 'include_service_mesh': 'true'|'false' (optional, default: 'false')
     Returns: JSON with analysis results
     """
     if 'file' not in request.files:
@@ -47,13 +51,19 @@ def analyze_api():
         return jsonify({'error': 'Invalid file type. Only JSON files are allowed.'}), 400
     
     strip_query_params = request.form.get('strip_query_params', 'true').lower() == 'true'
+    include_gateway_services = request.form.get('include_gateway_services', 'false').lower() == 'true'
+    include_service_mesh = request.form.get('include_service_mesh', 'false').lower() == 'true'
     
     try:
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        analyzer = TraceAnalyzer(strip_query_params=strip_query_params)
+        analyzer = TraceAnalyzer(
+            strip_query_params=strip_query_params,
+            include_gateway_services=include_gateway_services,
+            include_service_mesh=include_service_mesh
+        )
         analyzer.process_trace_file(filepath)
         
         os.remove(filepath)
@@ -70,7 +80,10 @@ def analyze_api():
 def analyze_web():
     """
     Web endpoint to analyze a trace file.
-    Accepts: multipart/form-data with 'file' field and optional 'strip_query_params' checkbox
+    Accepts: multipart/form-data with 'file' field and optional checkboxes:
+      - 'strip_query_params': whether to strip query parameters
+      - 'include_gateway_services': whether to include gateway/proxy services in counts
+      - 'include_service_mesh': whether to include service mesh sidecar spans
     Returns: HTML results page
     """
     if 'file' not in request.files:
@@ -85,13 +98,19 @@ def analyze_web():
         return render_template('index.html', error='Invalid file type. Only JSON files are allowed.')
     
     strip_query_params = 'strip_query_params' in request.form
+    include_gateway_services = 'include_gateway_services' in request.form
+    include_service_mesh = 'include_service_mesh' in request.form
     
     try:
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        analyzer = TraceAnalyzer(strip_query_params=strip_query_params)
+        analyzer = TraceAnalyzer(
+            strip_query_params=strip_query_params,
+            include_gateway_services=include_gateway_services,
+            include_service_mesh=include_service_mesh
+        )
         analyzer.process_trace_file(filepath)
         
         os.remove(filepath)
