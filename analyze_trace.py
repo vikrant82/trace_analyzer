@@ -261,8 +261,13 @@ class TraceAnalyzer:
             # values that were calculated in the hierarchy.
             self._populate_flat_metrics(span_nodes)
 
-            # Store the final, processed hierarchy for the UI.
-            self.trace_hierarchies[trace_id] = raw_hierarchy
+            # Pass 5: Normalize and aggregate the raw hierarchy
+            # This keeps the correct parent-child relationships but normalizes endpoints
+            # and aggregates sibling nodes with the same normalized endpoint
+            normalized_hierarchy = self._normalize_and_aggregate_hierarchy(raw_hierarchy)
+
+            # Store the normalized hierarchy for the UI
+            self.trace_hierarchies[trace_id] = normalized_hierarchy
             
             if spans:
                 start_times = [s.get('startTimeUnixNano', 0) for s in spans]
@@ -503,21 +508,52 @@ class TraceAnalyzer:
         for node in nodes:
             span = node.get('span', {})
             service = node.get('service_name', 'Unknown')
-            http_path = self.extract_http_path(span.get('attributes', []))
             
-            if http_path:
-                http_method = self.extract_http_method(span.get('attributes', []))
-                normalized_path, _ = self.normalize_path(http_path)
+            # First, check if the node already has display info (from earlier processing)
+            if '_display_method' in node and '_display_path' in node:
+                http_method = node['_display_method']
+                normalized_path = node['_display_path']
                 aggregation_key = f"{service}:{http_method}:{normalized_path}"
             else:
-                aggregation_key = f"{service}:{span.get('name', 'Unknown Span')}"
+                # Extract from span attributes
+                http_path = self.extract_http_path(span.get('attributes', []))
+                
+                if http_path:
+                    http_method = self.extract_http_method(span.get('attributes', []))
+                    # Default to method from span name if missing
+                    if not http_method:
+                        span_name = span.get('name', '')
+                        for method in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']:
+                            if span_name.startswith(method + ' ') or span_name == method:
+                                http_method = method
+                                break
+                        if not http_method:
+                            http_method = 'POST'  # Default to POST instead of UNKNOWN
+                    
+                    normalized_path, _ = self.normalize_path(http_path)
+                    aggregation_key = f"{service}:{http_method}:{normalized_path}"
+                    # Store method and path for display
+                    node['_display_method'] = http_method
+                    node['_display_path'] = normalized_path
+                else:
+                    # Non-HTTP span (Kafka, database, internal)
+                    aggregation_key = f"{service}:{span.get('name', 'Unknown Span')}"
             
             aggregated_nodes[aggregation_key].append(node)
 
         final_list = []
         for key, group in aggregated_nodes.items():
             if len(group) == 1:
-                final_list.append(group[0])
+                # Single node - enhance display name if HTTP
+                node = group[0]
+                if '_display_method' in node and '_display_path' in node:
+                    # Create a clean display name
+                    display_name = f"{node['_display_method']} {node['_display_path']}"
+                    # Only update if it's not already formatted
+                    if not node['span'].get('name', '').startswith(node['_display_method']):
+                        node['span']['name'] = display_name
+                    node['http_method'] = node['_display_method']
+                final_list.append(node)
             else:
                 total_time = sum(c['total_time_ms'] for c in group)
                 self_time = sum(c['self_time_ms'] for c in group)
@@ -526,13 +562,22 @@ class TraceAnalyzer:
                 # aggregated by the main recursive calls in _calculate_hierarchy_timings.
                 all_grandchildren = [grandchild for child in group for grandchild in child.get('children', [])]
                 
+                # Create a clean display name for aggregated nodes
+                if '_display_method' in group[0] and '_display_path' in group[0]:
+                    display_name = f"{group[0]['_display_method']} {group[0]['_display_path']}"
+                    http_method = group[0]['_display_method']
+                else:
+                    display_name = key
+                    http_method = None
+                
                 agg_node = {
                     'span': {
-                        'name': key,
+                        'name': display_name,
                         # Keep attributes from the first span for the template to extract the HTTP method.
                         'attributes': group[0]['span'].get('attributes', [])
                     },
                     'service_name': group[0]['service_name'],
+                    'http_method': http_method,
                     'children': all_grandchildren,
                     'total_time_ms': total_time,
                     'self_time_ms': self_time,
@@ -543,6 +588,370 @@ class TraceAnalyzer:
                 final_list.append(agg_node)
         
         return final_list
+
+    def _build_aggregated_hierarchy(self, trace_id: str, span_nodes: Dict):
+        """
+        Build an aggregated hierarchy view using the already-aggregated flat metrics.
+        This creates a tree that shows service call relationships with proper aggregation
+        by (service, method, path, parameter), matching the flat tables.
+        
+        Returns a root node with the trace entry point as the starting point.
+        """
+        # If no span nodes, return None
+        if not span_nodes:
+            return None
+        
+        # Find the root span (no parent or smallest startTime)
+        root_span_node = None
+        min_start_time = float('inf')
+        
+        for span_id, node in span_nodes.items():
+            span = node['span']
+            parent_id = span.get('parentSpanId')
+            start_time = span.get('startTimeUnixNano', 0)
+            
+            # Root is span with no parent, or earliest span if all have parents
+            if not parent_id or parent_id not in span_nodes:
+                if start_time < min_start_time:
+                    min_start_time = start_time
+                    root_span_node = node
+        
+        if not root_span_node:
+            # Fallback: use first span
+            root_span_node = list(span_nodes.values())[0]
+        
+        # Build a map of service calls: caller -> [(target, endpoint_info)]
+        service_children = defaultdict(list)
+        
+        # Add service-to-service calls
+        for key, stats in self.service_calls.items():
+            caller_service, target_service, http_method, normalized_path, param_str = key
+            
+            display_name = f"{http_method} {normalized_path}"
+            if param_str and param_str != '[no-params]':
+                display_name += f" ({param_str})"
+            
+            child_node = {
+                'span': {
+                    'name': display_name,
+                    'attributes': []
+                },
+                'service_name': target_service,
+                'http_method': http_method,
+                'total_time_ms': stats['total_time_ms'],
+                'self_time_ms': stats['total_self_time_ms'],
+                'aggregated': stats['count'] > 1,
+                'count': stats['count'],
+                'avg_time_ms': stats['total_time_ms'] / stats['count'] if stats['count'] > 0 else 0,
+                'children': []
+            }
+            
+            service_children[caller_service].append(child_node)
+        
+        # Also add incoming requests (endpoint_params) for services
+        service_endpoints = defaultdict(list)
+        for key, stats in self.endpoint_params.items():
+            service_name, http_method, normalized_path, param_str = key
+            
+            display_name = f"{http_method} {normalized_path}"
+            if param_str and param_str != '[no-params]':
+                display_name += f" ({param_str})"
+            
+            endpoint_info = {
+                'span': {
+                    'name': display_name,
+                    'attributes': []
+                },
+                'service_name': service_name,
+                'http_method': http_method,
+                'total_time_ms': stats['total_time_ms'],
+                'self_time_ms': stats['total_self_time_ms'],
+                'aggregated': stats['count'] > 1,
+                'count': stats['count'],
+                'avg_time_ms': stats['total_time_ms'] / stats['count'] if stats['count'] > 0 else 0,
+                'children': []
+            }
+            
+            service_endpoints[service_name].append(endpoint_info)
+        
+        # Build the tree recursively - NO aggregation, show each unique call
+        def build_tree(service_name, visited=None, depth=0):
+            if visited is None:
+                visited = set()
+            
+            # Prevent infinite recursion
+            if service_name in visited or depth > 10:
+                return []
+            
+            visited.add(service_name)
+            children = []
+            
+            # Add all outgoing calls from this service (already aggregated by service_calls keys)
+            for child in service_children.get(service_name, []):
+                # Recursively build children for this child's target service
+                child['children'] = build_tree(child['service_name'], visited.copy(), depth + 1)
+                children.append(child)
+            
+            return children
+        
+        # Create root node
+        root_service = root_span_node['service_name']
+        
+        # Get display name for root
+        root_display_name = root_span_node['span'].get('name', 'Trace Entry')
+        
+        # Extract HTTP info if available
+        root_http_path = self.extract_http_path(root_span_node['span'].get('attributes', []))
+        if root_http_path:
+            root_http_method = self.extract_http_method(root_span_node['span'].get('attributes', []))
+            if not root_http_method:
+                root_http_method = 'POST'
+            root_normalized_path, _ = self.normalize_path(root_http_path)
+            root_display_name = f"{root_http_method} {root_normalized_path}"
+        
+        # Build children - if root service has no calls, find all top-level services
+        root_children = build_tree(root_service)
+        
+        # If root has no children, it might be a gateway/proxy with no recorded calls
+        # Find services that aren't called by anyone (top-level entry points)
+        if not root_children:
+            all_callers = set(key[0] for key in self.service_calls.keys())  # caller services
+            all_targets = set(key[1] for key in self.service_calls.keys())  # target services
+            
+            # Services that make calls but aren't called by others are entry points
+            entry_services = all_callers - all_targets
+            
+            for entry_service in entry_services:
+                root_children.extend(build_tree(entry_service))
+        
+        root_node = {
+            'span': {
+                'name': root_display_name,
+                'attributes': root_span_node['span'].get('attributes', [])
+            },
+            'service_name': root_service,
+            'total_time_ms': root_span_node['total_time_ms'],
+            'self_time_ms': root_span_node['self_time_ms'],
+            'aggregated': False,
+            'count': 1,
+            'children': root_children
+        }
+        
+        return root_node
+
+    def _normalize_and_aggregate_hierarchy(self, root_node: Dict) -> Dict:
+        """
+        Recursively normalize span names and aggregate sibling nodes that have
+        the same normalized endpoint. This keeps the correct parent-child relationships
+        from the raw hierarchy while providing clean, aggregated display.
+        
+        Also filters out service mesh sidecar duplicates when include_service_mesh is False.
+        """
+        if not root_node:
+            return None
+        
+        def normalize_node(node):
+            """Normalize a single node's display name."""
+            span = node['span']
+            attributes = span.get('attributes', [])
+            
+            # Extract HTTP information
+            http_path = self.extract_http_path(attributes)
+            if http_path:
+                http_method = self.extract_http_method(attributes)
+                if not http_method:
+                    # Try to extract from span name
+                    span_name = span.get('name', '')
+                    if span_name.startswith(('GET ', 'POST ', 'PUT ', 'DELETE ', 'PATCH ')):
+                        http_method = span_name.split()[0]
+                    else:
+                        http_method = 'POST'  # Default
+                
+                normalized_path, param_values = self.normalize_path(http_path)
+                
+                # Convert param_values list to string
+                param_str = ', '.join(param_values) if param_values else ''
+                
+                # Create display name
+                display_name = f"{http_method} {normalized_path}"
+                if param_str:
+                    display_name += f" ({param_str})"
+                
+                node['span']['name'] = display_name
+                node['http_method'] = http_method
+                node['normalized_path'] = normalized_path
+                node['parameter_value'] = param_str
+            
+            return node
+        
+        def should_skip_node(node, parent_node=None):
+            """
+            Determine if a node is a service mesh sidecar duplicate that should be skipped.
+            Returns True if the node should be skipped (and its children lifted to parent).
+            """
+            if self.include_service_mesh:
+                return False  # Don't skip anything when mesh spans are included
+            
+            # Check for same-service duplicates (service calling itself)
+            if parent_node:
+                parent_service = parent_node.get('service_name', '')
+                node_service = node.get('service_name', '')
+                
+                # Skip if same service (sidecar duplicate)
+                if node_service and parent_service and node_service == parent_service:
+                    # Same service calling itself is a sidecar duplicate
+                    return True
+            
+            return False
+        
+        def filter_duplicates_and_lift(children, parent_node):
+            """
+            Recursively filter out same-service duplicates and lift their children.
+            Keep lifting until we find nodes from different services.
+            """
+            if not children:
+                return []
+            
+            result = []
+            for child in children:
+                normalize_node(child)
+                
+                if should_skip_node(child, parent_node):
+                    # Skip this duplicate and recursively process its children
+                    result.extend(filter_duplicates_and_lift(child.get('children', []), parent_node))
+                else:
+                    result.append(child)
+            
+            return result
+        
+        def aggregate_siblings(children, parent_node=None):
+            """Aggregate sibling nodes with the same normalized endpoint."""
+            if not children:
+                return []
+            
+            # First pass: filter out sidecar duplicates and lift their children
+            filtered_children = filter_duplicates_and_lift(children, parent_node)
+            
+            # Second pass: group by (service_name, http_method, normalized_path, parameter_value)
+            groups = {}
+            for child in filtered_children:
+                # Normalize again (in case we lifted unnormalized children)
+                normalize_node(child)
+                
+                # Create aggregation key
+                service = child.get('service_name', '')
+                method = child.get('http_method', '')
+                path = child.get('normalized_path', '')
+                param = child.get('parameter_value', '')
+                
+                # Include parameter in key to keep separate calls separate
+                key = (service, method, path, param)
+                
+                if key not in groups:
+                    groups[key] = []
+                groups[key].append(child)
+            
+            # Aggregate each group
+            aggregated = []
+            for group_children in groups.values():
+                if len(group_children) == 1:
+                    # Single node - just recursively process children
+                    node = group_children[0]
+                    node['children'] = aggregate_siblings(node.get('children', []), node)
+                    node['aggregated'] = False
+                    node['count'] = 1
+                    aggregated.append(node)
+                else:
+                    # Multiple nodes - aggregate them
+                    first = group_children[0]
+                    total_time = sum(c.get('total_time_ms', 0) for c in group_children)
+                    self_time = sum(c.get('self_time_ms', 0) for c in group_children)
+                    count = len(group_children)
+                    
+                    # Collect all grandchildren
+                    all_grandchildren = []
+                    for c in group_children:
+                        all_grandchildren.extend(c.get('children', []))
+                    
+                    # Recursively aggregate grandchildren (pass first as parent node)
+                    aggregated_grandchildren = aggregate_siblings(all_grandchildren, first)
+                    
+                    agg_node = {
+                        'span': first['span'].copy(),
+                        'service_name': first.get('service_name', ''),
+                        'http_method': first.get('http_method', ''),
+                        'normalized_path': first.get('normalized_path', ''),
+                        'parameter_value': first.get('parameter_value', ''),
+                        'total_time_ms': total_time,
+                        'self_time_ms': self_time,
+                        'children': aggregated_grandchildren,
+                        'aggregated': True,
+                        'count': count,
+                        'avg_time_ms': total_time / count if count > 0 else 0
+                    }
+                    aggregated.append(agg_node)
+            
+            return aggregated
+        
+        # Normalize and process the root
+        root_copy = root_node.copy()
+        normalize_node(root_copy)
+        root_copy['children'] = aggregate_siblings(root_copy.get('children', []), root_copy)
+        root_copy['aggregated'] = False
+        root_copy['count'] = 1
+        
+        return root_copy
+    
+    def _filter_hierarchy(self, node: Dict, span_nodes: Dict):
+        """
+        Filter the hierarchy tree to remove only sidecar duplicates based on service mesh settings.
+        The hierarchy should show the actual call flow, so we only filter out infrastructure duplicates.
+        
+        Args:
+            node: The current hierarchy node to filter
+            span_nodes: Flat map of all span nodes for looking up parents
+            
+        Returns:
+            Filtered node dict or None if it should be excluded
+        """
+        if not node:
+            return None
+        
+        span = node.get('span', {})
+        span_kind = span.get('kind', '')
+        
+        # Get parent information
+        parent_span_id = span.get('parentSpanId')
+        parent_node = span_nodes.get(parent_span_id)
+        parent_kind = parent_node['span'].get('kind') if parent_node else None
+        
+        # For hierarchy view, we want to show the actual trace flow
+        # Only filter out clear service mesh duplicates when service mesh filtering is OFF
+        should_include = True
+        
+        if not self.include_service_mesh:
+            # Filter only obvious sidecar duplicates
+            if span_kind == 'SPAN_KIND_SERVER' and parent_kind == 'SPAN_KIND_SERVER':
+                # This is likely a sidecar→app hop, filter it out
+                should_include = False
+            elif span_kind == 'SPAN_KIND_CLIENT' and parent_kind == 'SPAN_KIND_CLIENT':
+                # This is likely an app→sidecar hop, filter it out
+                should_include = False
+        
+        # If this node should be excluded, return None
+        if not should_include:
+            return None
+        
+        # Recursively filter children
+        if 'children' in node and node['children']:
+            filtered_children = []
+            for child in node['children']:
+                filtered_child = self._filter_hierarchy(child, span_nodes)
+                if filtered_child is not None:
+                    filtered_children.append(filtered_child)
+            node['children'] = filtered_children
+        
+        return node
 
 def main():
     import argparse

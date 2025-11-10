@@ -16,13 +16,8 @@
                 {% endif %}
                 <span class="node-prefix">{{ loop_index }}.</span>
                 <span class="node-service">{{ node.service_name }}</span>
-                <span class="node-name">
-                    {% if node.aggregated %}
-                        <span class="http-method">{{ node.http_method }}</span> {{ node.span.name }}
-                    {% else %}
-                        {{ node.span.name }}
-                    {% endif %}
-                </span>
+                <span class="node-arrow">→</span>
+                <span class="node-name">{{ node.span.name }}</span>
             </div>
             <div class="node-metrics">
                 {% if node.aggregated %}
