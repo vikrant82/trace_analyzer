@@ -44,6 +44,18 @@ This tool analyzes OpenTelemetry trace files exported from observability platfor
 - Kafka/messaging operation patterns and performance
 - Performance bottlenecks in both HTTP and messaging layers
 
+### How is this different from Jaeger/Grafana?
+
+While Jaeger and Grafana excel at real-time monitoring and exploring individual traces, **Trace Analyzer is designed for deep, offline, aggregated analysis** of captured traces. Key differentiators:
+
+- **Intelligent endpoint normalization** - Groups similar endpoints (e.g., `/api/users/123` → `/api/users/{id}`) to reduce noise and identify patterns
+- **Accurate self-time calculation** - Calculates time spent in each function excluding downstream calls, aggregated across all traces
+- **Portable and lightweight** - Runs on a single JSON file, no infrastructure required
+- **Focused reporting** - Quantitative summaries of service interactions and messaging operations
+- **Post-incident analysis** - Analyze snapshots from incidents without needing live system access
+
+📖 **See [analysis_summary.md](analysis_summary.md) for a detailed comparison and architectural deep-dive.**
+
 ## Project Structure
 
 ```
