@@ -92,6 +92,12 @@
                         <div class="stat-label">Kafka Total Time</div>
                     </div>
                     {% endif %}
+                    {% if results.summary.total_errors > 0 %}
+                    <div class="stat-card error">
+                        <div class="stat-value">{{ results.summary.total_errors }}</div>
+                        <div class="stat-label">Total Errors</div>
+                    </div>
+                    {% endif %}
                 </div>
             </section>
 
@@ -266,6 +272,54 @@
                                     </td>
                                     <td>{{ operation.count }}</td>
                                     <td class="time-cell">{{ operation.total_time_formatted }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </section>
+            {% endif %}
+
+            <!-- Error Summary Section -->
+            {% if results.error_analysis %}
+            <section class="error-summary-section">
+                <h2>🚨 Error Summary by Service</h2>
+                <p class="section-note">Summary of failed operations (spans marked with an error status), sorted by error count.</p>
+                
+                {% for service, errors in results.error_analysis.items() %}
+                <div class="service-detail">
+                    <h3>{{ service }}</h3>
+                    <div class="table-wrapper">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Operation Type</th>
+                                    <th>Endpoint / Details</th>
+                                    <th class="sortable" data-sort="number">Error Count <span class="sort-icon"></span></th>
+                                    <th>Top Error Messages</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for error in errors %}
+                                <tr>
+                                    <td class="operation-type">{{ error.type }}</td>
+                                    <td class="endpoint-cell">
+                                        <span class="http-method">{{ error.http_method }}</span>
+                                        {{ error.endpoint }}
+                                        {% if error.parameter %}
+                                            <span class="param-cell" title="{{ error.parameter }}">({{ error.parameter }})</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ error.error_count }}</td>
+                                    <td class="error-messages">
+                                        <ul>
+                                        {% for message, count in error.top_messages %}
+                                            <li><strong>({{ count }}x)</strong> {{ message }}</li>
+                                        {% endfor %}
+                                        </ul>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

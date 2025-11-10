@@ -125,7 +125,9 @@ def prepare_results(analyzer):
             'total_time_ms': stats['total_time_ms'],
             'total_time_formatted': analyzer.format_time(stats['total_time_ms']),
             'total_self_time_ms': stats.get('total_self_time_ms', 0.0),
-            'total_self_time_formatted': analyzer.format_time(stats.get('total_self_time_ms', 0.0))
+            'total_self_time_formatted': analyzer.format_time(stats.get('total_self_time_ms', 0.0)),
+            'error_count': stats['error_count'],
+            'error_messages': sorted(stats['error_messages'].items(), key=lambda item: -item[1])
         })
 
     for service in services_data:
@@ -159,7 +161,9 @@ def prepare_results(analyzer):
             'total_time_ms': stats['total_time_ms'],
             'total_time_formatted': analyzer.format_time(stats['total_time_ms']),
             'total_self_time_ms': stats.get('total_self_time_ms', 0.0),
-            'total_self_time_formatted': analyzer.format_time(stats.get('total_self_time_ms', 0.0))
+            'total_self_time_formatted': analyzer.format_time(stats.get('total_self_time_ms', 0.0)),
+            'error_count': stats['error_count'],
+            'error_messages': sorted(stats['error_messages'].items(), key=lambda item: -item[1])
         })
 
     service_calls_list = []
@@ -191,7 +195,9 @@ def prepare_results(analyzer):
             'details': details,
             'count': stats['count'],
             'total_time_ms': stats['total_time_ms'],
-            'total_time_formatted': analyzer.format_time(stats['total_time_ms'])
+            'total_time_formatted': analyzer.format_time(stats['total_time_ms']),
+            'error_count': stats['error_count'],
+            'error_messages': sorted(stats['error_messages'].items(), key=lambda item: -item[1])
         })
 
     kafka_services_list = []
@@ -217,7 +223,55 @@ def prepare_results(analyzer):
     total_kafka_ops = sum(stats['count'] for stats in analyzer.kafka_messages.values())
     total_kafka_time = sum(stats['total_time_ms'] for stats in analyzer.kafka_messages.values())
 
-    return {
+    # --- NEW: Error Analysis ---
+    errors_by_service = defaultdict(list)
+    
+    # Process errors from incoming requests
+    for service, endpoints in services_data.items():
+        for endpoint in endpoints:
+            if endpoint['error_count'] > 0:
+                errors_by_service[service].append({
+                    'type': 'Incoming Request',
+                    'http_method': endpoint['http_method'],
+                    'endpoint': endpoint['endpoint'],
+                    'parameter': endpoint['parameter'],
+                    'error_count': endpoint['error_count'],
+                    'top_messages': endpoint['error_messages']
+                })
+
+    # Process errors from service-to-service calls
+    for call in service_calls_list:
+        for endpoint in call['calls']:
+            if endpoint['error_count'] > 0:
+                errors_by_service[call['caller']].append({
+                    'type': f"Outgoing Call to {call['callee']}",
+                    'http_method': endpoint['http_method'],
+                    'endpoint': endpoint['endpoint'],
+                    'parameter': endpoint['parameter'],
+                    'error_count': endpoint['error_count'],
+                    'top_messages': endpoint['error_messages']
+                })
+
+    # Process errors from Kafka operations
+    for service_ops in kafka_services_list:
+        for op in service_ops['operations']:
+            if op['error_count'] > 0:
+                errors_by_service[service_ops['service']].append({
+                    'type': f"Kafka {op['operation']}",
+                    'http_method': op['message_type'], # Re-using this field for consistency
+                    'endpoint': op['details'],
+                    'parameter': '',
+                    'error_count': op['error_count'],
+                    'top_messages': op['error_messages']
+                })
+
+    # Sort errors within each service by count
+    for service in errors_by_service:
+        errors_by_service[service].sort(key=lambda x: -x['error_count'])
+    
+    total_errors = sum(e['error_count'] for service_errors in errors_by_service.values() for e in service_errors)
+
+    final_results = {
         'summary': {
             'total_requests': total_requests,
             'total_time_ms': total_wall_clock_time_ms,
@@ -228,7 +282,8 @@ def prepare_results(analyzer):
             'total_kafka_operations': total_kafka_ops,
             'total_kafka_time_ms': total_kafka_time,
             'total_kafka_time_formatted': analyzer.format_time(total_kafka_time),
-            'total_traces': len(analyzer.trace_summary)
+            'total_traces': len(analyzer.trace_summary),
+            'total_errors': total_errors
         },
         'services': {
             'summary': services_summary,
@@ -236,15 +291,17 @@ def prepare_results(analyzer):
         },
         'service_calls': service_calls_list,
         'kafka_operations': kafka_services_list,
+        'error_analysis': dict(errors_by_service),
         # --- NEW: Add hierarchical data to the results ---
         'trace_hierarchies': analyzer.trace_hierarchies,
         'trace_summary': analyzer.trace_summary
     }
+    return final_results
 
 
 if __name__ == '__main__':
     os.makedirs('templates', exist_ok=True)
     os.makedirs('static', exist_ok=True)
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
 
