@@ -39,6 +39,23 @@ Jaeger and Grafana require a persistent, complex infrastructure to operate.
     - **Kafka/Messaging:** It elevates messaging to a first-class citizen, providing a dedicated section that aggregates performance metrics for `producer` and `consumer` operations.
 - **Benefit:** This is more direct and actionable than a generic service map. It provides a quantitative summary of inter-service dependencies and messaging performance, making it easy to spot chatty interactions or slow message handlers.
 
+### 5. Intelligent Filtering for Service Mesh Environments
+
+Modern microservices often run on service mesh platforms like Istio or Envoy, which inject sidecar proxies that create duplicate spans for the same logical operation (e.g., both the application's span and the Envoy proxy's span). This can pollute trace analysis with infrastructure noise.
+
+- **How Trace Analyzer is Different:** The tool provides **configurable filtering** with three independent controls:
+    - **Strip Query Parameters** (default: on) - Groups similar endpoints by removing query strings
+    - **Include Gateway Services** (default: off) - Controls whether to show API gateways and proxies that only have CLIENT spans
+    - **Include Service Mesh** (default: off) - Controls whether to show Istio/Envoy sidecar spans (SERVER→SERVER and CLIENT→CLIENT chains)
+
+- **Benefit:** Users can choose their level of detail:
+    - **Business Logic Only** (defaults) - Clean view showing only application spans, ideal for performance analysis
+    - **+ Gateways** - Includes API gateways and load balancers without sidecar noise
+    - **+ Service Mesh** - Shows complete infrastructure including sidecar overhead, useful for diagnosing mesh issues
+    - **Complete View** - Everything included for comprehensive debugging
+
+  This flexibility is especially valuable in Kubernetes environments with Istio/Envoy where raw traces contain significant infrastructure duplication. Jaeger shows everything without smart filtering, making it harder to focus on application-level bottlenecks.
+
 ## Architecture Highlight: The Four-Pass Analysis Pipeline
 
 The core of the tool's unique value lies in its processing pipeline, which ensures data integrity and accurate calculations.
