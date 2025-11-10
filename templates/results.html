@@ -7,8 +7,14 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    {% macro render_trace_node(node, loop_index, total_trace_time) %}
-    <li class="{{ 'collapsible' if node.children }}" data-state="{{ 'expanded' if node.children else '' }}">
+    {% macro render_trace_node(node, loop_index, total_trace_time, parent_total_time) %}
+    {# Calculate percentage of total trace time #}
+    {% set total_perc = (node.total_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
+    
+    <li class="{{ 'collapsible' if node.children }} trace-node" 
+        data-state="{{ 'expanded' if node.children else '' }}"
+        data-total-time="{{ node.total_time_ms }}"
+        data-trace-percent="{{ "%.1f"|format(total_perc) }}">
         <div class="node-content">
             <div class="node-main">
                 {% if node.children %}
@@ -25,7 +31,6 @@
                 <span class="metric avg-time"><strong>Avg:</strong> {{ "%.2f"|format(node.avg_time_ms) }} ms</span>
                 {% endif %}
                 
-                {% set total_perc = (node.total_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
                 <span class="metric total-time">
                     <strong>Total:</strong> {{ "%.2f"|format(node.total_time_ms) }} ms ({{ "%.1f"|format(total_perc) }}%)
                 </span>
@@ -39,7 +44,7 @@
         {% if node.children %}
         <ul>
             {% for child in node.children %}
-            {{ render_trace_node(child, loop.index, total_trace_time) }}
+            {{ render_trace_node(child, loop.index, total_trace_time, node.total_time_ms) }}
             {% endfor %}
         </ul>
         {% endif %}
@@ -96,7 +101,46 @@
                 </div>
             </section>
 
-            <!-- Services Summary -->
+            <!-- Trace Hierarchy -->
+            {% if results.trace_hierarchies %}
+            <section class="trace-hierarchy-section">
+                <h2>Trace Hierarchy</h2>
+                <p class="section-note">Hierarchical view of each trace, showing self-time and aggregated calls.</p>
+                <div class="hierarchy-controls">
+                    <button class="btn btn-sm btn-expand-all">Expand All</button>
+                    <button class="btn btn-sm btn-collapse-all">Collapse All</button>
+                    <div class="highlight-slider-container">
+                        <label for="highlight-threshold">
+                            Highlight nodes contributing: <strong><span id="threshold-value">10</span>%+</strong>
+                        </label>
+                        <input type="range" id="highlight-threshold" min="5" max="95" value="10" step="5">
+                        <span class="slider-hint">Move slider to adjust highlighting threshold</span>
+                    </div>
+                </div>
+                
+                {% for trace_id, hierarchy in results.trace_hierarchies.items() %}
+                <div class="trace-detail">
+                    <div class="trace-header">
+                        <h3>Trace ID: <span class="trace-id">{{ trace_id }}</span></h3>
+                        <div class="trace-summary-stats">
+                            <span><strong>Wall-Clock Duration:</strong> {{ results.trace_summary[trace_id].wall_clock_duration_formatted }}</span>
+                            <span><strong>Total Spans:</strong> {{ results.trace_summary[trace_id].span_count }}</span>
+                        </div>
+                    </div>
+
+                    <div class="tree">
+                        <ul>
+                            {% for node in hierarchy.children %}
+                            {{ render_trace_node(node, loop.index, results.trace_summary[trace_id].wall_clock_duration_ms, hierarchy.total_time_ms) }}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endfor %}
+            </section>
+            {% endif %}
+
+            <!-- Services Overview -->
             <section class="services-overview">
                 <h2>Services Overview</h2>
                     <div class="table-wrapper">
@@ -326,38 +370,6 @@
             {% endif %}
         </main>
 
-        <!-- Section 4: Trace Hierarchy (New) -->
-        {% if results.trace_hierarchies %}
-        <section class="trace-hierarchy-section">
-            <h2>Trace Hierarchy</h2>
-            <p class="section-note">Hierarchical view of each trace, showing self-time and aggregated calls.</p>
-            <div class="hierarchy-controls">
-                <button class="btn btn-sm btn-expand-all">Expand All</button>
-                <button class="btn btn-sm btn-collapse-all">Collapse All</button>
-            </div>
-            
-            {% for trace_id, hierarchy in results.trace_hierarchies.items() %}
-            <div class="trace-detail">
-                <div class="trace-header">
-                    <h3>Trace ID: <span class="trace-id">{{ trace_id }}</span></h3>
-                    <div class="trace-summary-stats">
-                        <span><strong>Wall-Clock Duration:</strong> {{ results.trace_summary[trace_id].wall_clock_duration_formatted }}</span>
-                        <span><strong>Total Spans:</strong> {{ results.trace_summary[trace_id].span_count }}</span>
-                    </div>
-                </div>
-
-                <div class="tree">
-                    <ul>
-                        {% for node in hierarchy.children %}
-                        {{ render_trace_node(node, loop.index, results.trace_summary[trace_id].wall_clock_duration_ms) }}
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-            {% endfor %}
-        </section>
-        {% endif %}
-
         <footer>
             <a href="/" class="btn btn-primary">Analyze Another File</a>
             <p style="text-align: center; margin-top: 20px; font-size: 0.9em;">
@@ -406,6 +418,38 @@
                     const allCollapsible = hierarchySection.querySelectorAll('li.collapsible');
                     allCollapsible.forEach(li => li.dataset.state = 'collapsed');
                 });
+
+                // Highlighting slider functionality
+                const slider = document.getElementById('highlight-threshold');
+                const thresholdDisplay = document.getElementById('threshold-value');
+                
+                if (slider && thresholdDisplay) {
+                    // Apply initial highlighting
+                    updateHighlighting(slider.value);
+                    
+                    // Update on slider change
+                    slider.addEventListener('input', function() {
+                        const threshold = this.value;
+                        thresholdDisplay.textContent = threshold;
+                        updateHighlighting(threshold);
+                    });
+                }
+                
+                function updateHighlighting(threshold) {
+                    const allNodes = hierarchySection.querySelectorAll('.trace-node');
+                    
+                    allNodes.forEach(node => {
+                        const tracePercent = parseFloat(node.dataset.tracePercent || 0);
+                        
+                        // Remove all highlight classes
+                        node.classList.remove('time-highlighted');
+                        
+                        // Add highlight if above threshold
+                        if (tracePercent >= threshold) {
+                            node.classList.add('time-highlighted');
+                        }
+                    });
+                }
             }
         });
 

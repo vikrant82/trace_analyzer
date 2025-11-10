@@ -37,7 +37,8 @@ Jaeger and Grafana require a persistent, complex infrastructure to operate.
 - **How Trace Analyzer is Different:** The tool generates specific, quantitative reports on service-to-service calls and Kafka messaging operations.
     - **Service Calls:** It distinguishes incoming vs. outgoing calls and presents a table of `caller → callee` interactions, including which endpoints were called, the frequency, and the total time spent.
     - **Kafka/Messaging:** It elevates messaging to a first-class citizen, providing a dedicated section that aggregates performance metrics for `producer` and `consumer` operations.
-- **Benefit:** This is more direct and actionable than a generic service map. It provides a quantitative summary of inter-service dependencies and messaging performance, making it easy to spot chatty interactions or slow message handlers.
+    - **Trace Hierarchy:** Provides an interactive visual tree representation of the complete request flow with parent-child relationships, accurate timing breakdowns (total time and self-time), and dynamic highlighting to identify bottlenecks.
+- **Benefit:** This is more direct and actionable than a generic service map. It provides a quantitative summary of inter-service dependencies and messaging performance, making it easy to spot chatty interactions or slow message handlers. The visual hierarchy with adjustable highlighting (5-95% threshold) allows users to quickly identify where time is being spent in the trace execution flow.
 
 ### 5. Intelligent Filtering for Service Mesh Environments
 
@@ -56,7 +57,7 @@ Modern microservices often run on service mesh platforms like Istio or Envoy, wh
 
   This flexibility is especially valuable in Kubernetes environments with Istio/Envoy where raw traces contain significant infrastructure duplication. Jaeger shows everything without smart filtering, making it harder to focus on application-level bottlenecks.
 
-## Architecture Highlight: The Four-Pass Analysis Pipeline
+## Architecture Highlight: The Five-Pass Analysis Pipeline
 
 The core of the tool's unique value lies in its processing pipeline, which ensures data integrity and accurate calculations.
 
@@ -64,22 +65,28 @@ The core of the tool's unique value lies in its processing pipeline, which ensur
 graph TD
     A[Pass 1: Ingest & Group] --> B;
     subgraph analyze_trace.py
-        A-- Traces Grouped by traceId --> B(Pass 2: Build Hierarchy & Adopt Orphans);
-        B-- Corrected Tree Structure --> C(Pass 3: Calculate Self-Time);
-        C-- Hierarchy with Timings --> D(Pass 4: Populate Flat Metrics);
+        A-- Traces Grouped by traceId --> B(Pass 2: Build Raw Hierarchy & Adopt Orphans);
+        B-- Raw Tree Structure --> C(Pass 3: Calculate Initial Self-Time);
+        C-- Raw Hierarchy with Timings --> D(Pass 4: Populate Flat Metrics);
+        D-- Aggregated Metrics --> F(Pass 5: Normalize & Filter Hierarchy);
+        F-- Normalized Tree, Filtered Duplicates --> G(Recalculate Self-Times);
     end
-    D --> E[Final Report: Web/JSON];
+    G --> E[Final Report: Web/JSON with Trace Hierarchy];
 
     subgraph Legend
         direction LR
         L1[Orphan Adoption: Repairs broken traces]
         L2[Self-Time Calc: Accurate bottleneck identification]
+        L3[Normalization: Groups similar endpoints]
+        L4[Duplicate Filtering: Removes service mesh sidecars]
     end
 
     style A fill:#cde4ff
     style B fill:#cde4ff
     style C fill:#cde4ff
     style D fill:#cde4ff
+    style F fill:#cde4ff
+    style G fill:#cde4ff
     style E fill:#d4edda
 ```
 
