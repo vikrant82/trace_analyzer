@@ -900,7 +900,33 @@ class TraceAnalyzer:
         root_copy['aggregated'] = False
         root_copy['count'] = 1
         
+        # Recalculate self-times after filtering and lifting
+        # The original self-times were calculated on the raw hierarchy with duplicates,
+        # so we need to recalculate based on the new structure
+        self._recalculate_self_times(root_copy)
+        
         return root_copy
+    
+    def _recalculate_self_times(self, node: Dict):
+        """
+        Recursively recalculate self-times after hierarchy modifications.
+        Self-time = total_time - sum(children's total_time)
+        """
+        if not node:
+            return
+        
+        # Recurse to children first (bottom-up)
+        for child in node.get('children', []):
+            self._recalculate_self_times(child)
+        
+        # Calculate self-time for this node
+        children = node.get('children', [])
+        if children:
+            child_total = sum(c.get('total_time_ms', 0) for c in children)
+            node['self_time_ms'] = max(0.0, node.get('total_time_ms', 0) - child_total)
+        else:
+            # Leaf node: self-time equals total time
+            node['self_time_ms'] = node.get('total_time_ms', 0)
     
     def _filter_hierarchy(self, node: Dict, span_nodes: Dict):
         """
