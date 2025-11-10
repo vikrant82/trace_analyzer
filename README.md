@@ -18,15 +18,23 @@ Perfect for analyzing distributed systems, microservices architectures, event-dr
   - Detects Kafka consumer and producer operations
   - Tracks message processing spans
   - Extracts message IDs, service IDs, and operation details
+- **Visual Trace Hierarchy with Dynamic Highlighting:**
+  - Interactive tree visualization showing complete request flow
+  - Parent-child span relationships with timing breakdowns
+  - User-adjustable highlighting threshold (5-95%) to identify bottlenecks
+  - Color-coded nodes showing where time is spent in the trace
+  - Expand/collapse controls for deep trace exploration
 - Extracts and groups endpoints by service name
 - Detects and normalizes URL parameters (UUIDs, numeric IDs, encoded strings)
-- **Tracks timing information** - calculates total time spent per endpoint/operation
+- **Intelligent service mesh filtering** - eliminates Istio/Envoy sidecar duplicates
+- **Tracks timing information** - calculates accurate total and self-time per endpoint/operation
 - Tracks each unique endpoint-parameter combination per service
 - Generates comprehensive reports with:
   - Summary statistics across all services (requests + time)
-  - Section 1: Incoming HTTP requests by service
-  - Section 2: Service-to-service HTTP calls (caller → callee)
-  - Section 3: Kafka/messaging operations by service
+  - **Interactive Trace Hierarchy** (visual tree with highlighting slider)
+  - Services Overview with incoming requests by service
+  - Service-to-service HTTP calls (caller → callee)
+  - Kafka/messaging operations by service
   - Table of contents with service links
   - Each table includes: Operation details, Count, **Total Time**
   - **All data sorted by Total Time (descending)** - shows slowest operations first
@@ -183,26 +191,47 @@ curl -X POST \
 
 ## Output
 
-The script generates a markdown file (`trace_analysis.md` by default) with two main sections:
+The tool generates comprehensive reports with multiple sections:
 
-### 1. Incoming Requests by Service
+### 1. Summary Statistics
+- Total requests, time, services, and endpoints
+- Quick overview of the entire trace analysis
+
+### 2. Trace Hierarchy (Interactive Visual Tree)
+- **Visual tree representation** showing complete request flow from root to leaves
+- Parent-child relationships with accurate timing breakdowns
+- **Dynamic highlighting slider** (5-95% threshold) to identify bottlenecks
+  - Default: 10% - highlights nodes contributing 10%+ of total trace time
+  - User-adjustable in real-time
+  - Color-coded borders and metrics for quick visual identification
+- Shows normalized endpoints with parameter values
+- Displays both **Total Time** (including children) and **Self Time** (excluding children)
+- Expand/collapse controls for deep trace navigation
+- Eliminates service mesh duplicates for clean visualization
+
+### 3. Services Overview (Incoming Requests by Service)
 - Shows **only incoming HTTP requests** that each service receives (relative paths)
 - Excludes outgoing calls to other services
 - Separate table for each service with their received endpoints
 - Includes count and **total time spent** per endpoint
 - **Sorted by total time (descending)** - slowest endpoints appear first
 
-### 2. Service-to-Service Calls (Outgoing)
+### 4. Service-to-Service Calls (Outgoing)
 - Shows **outgoing HTTP calls** from one service to another
 - Extracted from full URLs (e.g., `http://data-service.data-service.svc...`)
 - Grouped by caller → callee service pairs
 - Each pair shows which endpoints are called with counts and total time
 - **Sorted by total time (descending)** per service pair
 
+### 5. Kafka/Messaging Operations
+- Consumer and producer operations
+- Message processing spans
+- Performance metrics per operation
+
 The report also includes:
-- Summary statistics at the top (requests and time)
-- Table of contents with links to each service section (includes time per service)
+- Table of contents with links to each section
 - Console output with service-level statistics and **top 10 slowest endpoints**
+- Interactive web interface with sortable tables
 
 ### Example Output
 

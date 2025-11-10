@@ -54,21 +54,29 @@ cat trace_analysis.md
 ### Step 3: Explore Results
 
 The analysis shows:
+- 📊 **Summary Statistics**: Overview of total requests, time, services, and endpoints
+- 🌲 **Trace Hierarchy**: Interactive visual tree showing complete request flow with dynamic highlighting
+  - Adjust the slider (5-95%) to highlight bottlenecks contributing to total trace time
+  - Default 10% threshold highlights significant contributors
+  - Expand/collapse nodes to explore deep traces
 - 📊 **Incoming Requests**: What HTTP endpoints each service receives
 - 🔗 **Service Calls**: Which services call each other via HTTP
 - 📨 **Kafka Operations**: Message consumer/producer operations and processing
-- ⏱️ **Performance**: Total time spent on each endpoint/operation
+- ⏱️ **Performance**: Total time and self-time spent on each endpoint/operation
 - 📈 **Statistics**: Request counts and timing data
 
 **Everything sorted by total time** - see your slowest operations first!
 
 ## 🌐 Web Interface Features
 
+- **Interactive Trace Hierarchy**: Visual tree with expand/collapse and dynamic highlighting
+- **Adjustable Highlighting**: Slider control (5-95%) to identify bottlenecks in real-time
 - **Interactive Dashboard**: Visual stats and tables
 - **Search & Filter**: Find specific endpoints quickly
 - **Responsive Design**: Works on desktop and mobile
 - **REST API**: Programmatic access for automation
 - **Sortable Tables**: Click column headers to sort by time or count
+- **Smart Filtering**: Optional gateway services and service mesh span controls
 
 ## 📝 CLI Features
 
