@@ -27,15 +27,37 @@ class KafkaStats(TypedDict):
 
 
 class TraceAnalyzer:
-    def __init__(self, strip_query_params=True):
+    def __init__(self, strip_query_params=True, include_gateway_services=False, include_service_mesh=False):
         """
         Initialize the TraceAnalyzer.
         
         Args:
             strip_query_params (bool): If True, removes query parameters from URLs before analysis.
                                       Default: True (recommended for cleaner grouping)
+            
+            include_gateway_services (bool): If True, includes services that only have CLIENT spans
+                                            or act as pure proxies/gateways in service counts.
+                                            Default: False (excludes pure gateway/proxy services)
+                                            
+                                            When False: Counts only services with SERVER spans.
+                                            When True: Also counts services with only CLIENT spans
+                                            (e.g., load balancers, API gateways that only forward requests).
+            
+            include_service_mesh (bool): If True, includes service mesh sidecar spans (Istio/Envoy)
+                                        in the analysis, showing duplicate entries for each logical
+                                        operation (both application and sidecar spans).
+                                        Default: False (filters out sidecar duplicates)
+                                        
+                                        When False: Filters SERVER→SERVER and CLIENT→CLIENT chains
+                                        (typical Istio/Envoy sidecar patterns), showing only application spans.
+                                        
+                                        When True: Includes all spans, showing complete request path
+                                        through service mesh infrastructure. Useful for diagnosing
+                                        service mesh overhead and configuration issues.
         """
         self.strip_query_params = strip_query_params
+        self.include_gateway_services = include_gateway_services
+        self.include_service_mesh = include_service_mesh
         
         # Data structures for flat analysis
         self.endpoint_params: DefaultDict[Tuple, EndpointStats] = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0, 'error_count': 0, 'error_messages': defaultdict(int)})
@@ -306,7 +328,35 @@ class TraceAnalyzer:
         """
         Pass 4: Populate the flat summary tables. This function reads the
         final, correct values from the nodes after the hierarchy has been fully processed.
+        
+        Service Filtering Logic:
+        
+        include_gateway_services (controls CLIENT-only services):
+        - False (default): Only counts services with SERVER spans
+        - True: Also counts services with only CLIENT spans (API gateways, proxies)
+        
+        include_service_mesh (controls sidecar duplicates):
+        - False (default): Filters out SERVER→SERVER and CLIENT→CLIENT chains
+          (Istio/Envoy sidecar patterns), showing only application spans
+        - True: Includes all spans, showing both application and sidecar spans
+          (useful for diagnosing service mesh overhead)
+        
+        Combined behavior:
+        - Both False: Business logic only, cleanest view
+        - Gateway True, Mesh False: Includes API gateways, excludes sidecar duplicates
+        - Gateway False, Mesh True: Includes sidecar duplicates, excludes pure gateways
+        - Both True: Complete infrastructure view, all spans included
         """
+        # Pre-pass: When include_gateway_services is True, collect all services that have SERVER spans
+        # This prevents us from double-counting CLIENT spans from services that also have SERVER spans
+        services_with_server_spans = set()
+        if self.include_gateway_services:
+            for span_id, node in span_nodes.items():
+                span = node['span']
+                span_kind = span.get('kind', '')
+                if span_kind == 'SPAN_KIND_SERVER':
+                    services_with_server_spans.add(node['service_name'])
+        
         for span_id, node in span_nodes.items():
             span = node['span']
             attributes = span.get('attributes', [])
@@ -328,10 +378,41 @@ class TraceAnalyzer:
             http_path = self.extract_http_path(attributes)
             if http_path:
                 http_method = self.extract_http_method(attributes)
+                # If method is missing, try to extract from span name or default to UNKNOWN
+                if not http_method:
+                    span_name = span.get('name', '')
+                    # Common HTTP methods that might appear in span names
+                    for method in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']:
+                        if span_name.startswith(method + ' ') or span_name == method:
+                            http_method = method
+                            break
+                    # If still no method found, use UNKNOWN to avoid empty strings
+                    if not http_method:
+                        http_method = 'UNKNOWN'
+                
                 normalized_path, params = self.normalize_path(http_path)
                 param_str = params[0] if params else '[no-params]'
                 
-                if span_kind == 'SPAN_KIND_SERVER' and (parent_kind == 'SPAN_KIND_CLIENT' or parent_kind is None):
+                # Apply filtering logic for SERVER spans based on configuration
+                should_include_server = False
+                if span_kind == 'SPAN_KIND_SERVER':
+                    # Step 1: Check if we should filter out service mesh sidecar duplicates
+                    if self.include_service_mesh:
+                        # Include ALL SERVER spans when service mesh is enabled
+                        should_include_server = True
+                    else:
+                        # Filter out SERVER→SERVER hops (Envoy sidecar → app pattern)
+                        # Include: CLIENT parent (normal call), None (root), INTERNAL (app logic)
+                        # Exclude: SERVER parent (sidecar duplicate)
+                        should_include_server = (parent_kind != 'SPAN_KIND_SERVER')
+                    
+                    # Step 2: Further filter based on gateway_services setting
+                    # This only matters when include_service_mesh=False
+                    if not self.include_service_mesh and not self.include_gateway_services:
+                        # Strictest mode: Only CLIENT parent or root (no parent)
+                        should_include_server = (parent_kind == 'SPAN_KIND_CLIENT' or parent_kind is None)
+                
+                if should_include_server:
                     key = (node['service_name'], http_method, normalized_path, param_str)
                     self.endpoint_params[key]['count'] += 1
                     self.endpoint_params[key]['total_time_ms'] += total_time
@@ -340,15 +421,42 @@ class TraceAnalyzer:
                         self.endpoint_params[key]['error_count'] += 1
                         self.endpoint_params[key]['error_messages'][error_message] += 1
                 
-                elif span_kind == 'SPAN_KIND_CLIENT' and parent_kind != 'SPAN_KIND_CLIENT':
-                    target_service = self.extract_target_service_from_url(http_path)
-                    key = (node['service_name'], target_service, http_method, normalized_path, param_str)
-                    self.service_calls[key]['count'] += 1
-                    self.service_calls[key]['total_time_ms'] += total_time
-                    self.service_calls[key]['total_self_time_ms'] += self_time
-                    if is_error and error_message:
-                        self.service_calls[key]['error_count'] += 1
-                        self.service_calls[key]['error_messages'][error_message] += 1
+                # Apply filtering logic for CLIENT spans based on configuration
+                elif span_kind == 'SPAN_KIND_CLIENT':
+                    # When include_gateway_services is True, we need to capture services
+                    # that ONLY have CLIENT spans (pure gateways/proxies)
+                    if self.include_gateway_services:
+                        # Only add CLIENT span as incoming request if service has NO SERVER spans AT ALL
+                        # This captures pure gateway services like 'gateway-service' or 'gs:prod:/dx'
+                        # Use the pre-collected set for efficient lookup
+                        if node['service_name'] not in services_with_server_spans:
+                            # Treat this CLIENT span as if it's an incoming request to the gateway
+                            key = (node['service_name'], http_method, normalized_path, param_str)
+                            self.endpoint_params[key]['count'] += 1
+                            self.endpoint_params[key]['total_time_ms'] += total_time
+                            self.endpoint_params[key]['total_self_time_ms'] += self_time
+                            if is_error and error_message:
+                                self.endpoint_params[key]['error_count'] += 1
+                                self.endpoint_params[key]['error_messages'][error_message] += 1
+                    
+                    # Always track service-to-service calls (for the service calls table)
+                    # Apply filtering based on service mesh setting
+                    if self.include_service_mesh:
+                        # Include ALL CLIENT spans when service mesh is enabled
+                        should_include_client = True
+                    else:
+                        # Filter out CLIENT→CLIENT chains (app → Envoy sidecar pattern)
+                        should_include_client = (parent_kind != 'SPAN_KIND_CLIENT')
+                    
+                    if should_include_client:
+                        target_service = self.extract_target_service_from_url(http_path)
+                        key = (node['service_name'], target_service, http_method, normalized_path, param_str)
+                        self.service_calls[key]['count'] += 1
+                        self.service_calls[key]['total_time_ms'] += total_time
+                        self.service_calls[key]['total_self_time_ms'] += self_time
+                        if is_error and error_message:
+                            self.service_calls[key]['error_count'] += 1
+                            self.service_calls[key]['error_messages'][error_message] += 1
             else:
                 op_type, msg_type, details = self.extract_kafka_info(span, attributes)
                 if op_type in ['consumer', 'producer']:
@@ -446,17 +554,33 @@ Examples:
   python analyze_trace.py trace.json
   python analyze_trace.py trace.json -o custom_report.md
   python analyze_trace.py trace.json --keep-query-params
+  python analyze_trace.py trace.json --include-gateways
+  python analyze_trace.py trace.json --include-service-mesh
+  python analyze_trace.py trace.json --include-gateways --include-service-mesh
         """
     )
     parser.add_argument('input_file', help='Path to the trace JSON file')
     parser.add_argument('-o', '--output', dest='output_file', default='trace_analysis.md', help='Output markdown file')
     parser.add_argument('--keep-query-params', action='store_true', help='Keep query parameters in URLs')
+    parser.add_argument('--include-gateways', action='store_true', 
+                       help='Include gateway/proxy services with only CLIENT spans (default: exclude them)')
+    parser.add_argument('--include-service-mesh', action='store_true',
+                       help='Include service mesh sidecar spans (Istio/Envoy), showing duplicates (default: filter them out)')
     args = parser.parse_args()
     
-    analyzer = TraceAnalyzer(strip_query_params=not args.keep_query_params)
+    analyzer = TraceAnalyzer(
+        strip_query_params=not args.keep_query_params,
+        include_gateway_services=args.include_gateways,
+        include_service_mesh=args.include_service_mesh
+    )
     
     try:
-        print(f"\nConfiguration:\n  Input file: {args.input_file}\n  Output file: {args.output_file}\n  Strip query params: {not args.keep_query_params}\n")
+        print(f"\nConfiguration:")
+        print(f"  Input file: {args.input_file}")
+        print(f"  Output file: {args.output_file}")
+        print(f"  Strip query params: {not args.keep_query_params}")
+        print(f"  Include gateway services: {args.include_gateways}")
+        print(f"  Include service mesh: {args.include_service_mesh}\n")
         analyzer.process_trace_file(args.input_file)
         # The markdown report is not part of the web app, but we keep it for CLI use.
         # analyzer.generate_markdown_report(args.output_file)

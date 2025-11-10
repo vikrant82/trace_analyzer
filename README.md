@@ -337,6 +337,111 @@ This separation helps you understand:
 - The flow of requests across your distributed system
 - Microservices architecture and inter-service dependencies
 
+## Understanding Service Counting & Filtering
+
+The analyzer provides two independent filtering options to control what appears in your analysis:
+
+### 1. Include Gateway Services (Controls CLIENT-only services)
+
+**Default (OFF):** Only counts services with `SPAN_KIND_SERVER` spans
+- Excludes: API gateways, load balancers, proxies that only forward requests (CLIENT-only)
+- **Use case:** Focus on services with business logic
+
+**When enabled (ON):** Also counts services with only CLIENT spans
+- Includes: API gateways, load balancers, proxies
+- **Use case:** Full service topology including forwarding infrastructure
+
+**Example:** `gateway-service` (only has CLIENT spans) → Excluded by default, included when enabled
+
+### 2. Include Service Mesh (Controls Istio/Envoy sidecar spans)
+
+**Default (OFF):** Filters out service mesh sidecar duplicates
+- Excludes: SERVER→SERVER chains (Envoy→App)
+- Excludes: CLIENT→CLIENT chains (App→Envoy)
+- Shows: Only application-level spans (cleanest view)
+- **Use case:** Normal analysis without infrastructure noise
+
+**When enabled (ON):** Includes all sidecar spans
+- Shows: Both application AND Envoy sidecar spans
+- Result: Duplicate entries for each logical operation
+- **Use case:** Diagnosing service mesh overhead and configuration
+
+### Combined Behavior Matrix
+
+| Gateway Services | Service Mesh | Result |
+|------------------|--------------|--------|
+| ❌ OFF | ❌ OFF | **Business logic only** (cleanest view, recommended) |
+| ✅ ON | ❌ OFF | Business logic + API gateways (no sidecar duplicates) |
+| ❌ OFF | ✅ ON | Business logic + sidecar duplicates (no gateways) |
+| ✅ ON | ✅ ON | **Complete infrastructure** (all services, all spans) |
+
+### Service Mesh Example
+
+With **Include Service Mesh OFF** (default):
+```
+data-service:
+  POST /api/users  →  1 request, 50ms  ✅ (application span only)
+```
+
+With **Include Service Mesh ON**:
+```
+data-service:
+  POST /api/users  →  1 request, 50ms  ✅ (application span)
+  POST /api/users  →  1 request, 52ms  ✅ (Envoy sidecar span)
+```
+
+### How to Enable These Options
+
+**CLI:**
+```bash
+# Default: business logic only
+python analyze_trace.py trace.json
+
+# Include gateway services (CLIENT-only)
+python analyze_trace.py trace.json --include-gateways
+
+# Include service mesh sidecars (Istio/Envoy)
+python analyze_trace.py trace.json --include-service-mesh
+
+# Include everything
+python analyze_trace.py trace.json --include-gateways --include-service-mesh
+```
+
+**Web UI:**
+- Check **"Include Gateway Services"** to include API gateways/proxies
+- Check **"Include Service Mesh Spans"** to include Istio/Envoy sidecars
+
+**API:**
+```bash
+curl -X POST http://localhost:5000/api/analyze \
+  -F "file=@trace.json" \
+  -F "include_gateway_services=true" \
+  -F "include_service_mesh=true"
+```
+
+### When to Use Each Mode
+
+**Default (both OFF)** - Most common use case:
+- ✅ Clean analysis of business logic
+- ✅ No infrastructure noise
+- ✅ Accurate application performance
+
+**Gateway Services ON:**
+- 🔍 Understanding complete service topology
+- 🔍 Debugging gateway/proxy issues
+- 🔍 Analyzing load balancer behavior
+
+**Service Mesh ON:**
+- 🔧 Diagnosing Istio/Envoy configuration
+- 🔧 Measuring service mesh overhead
+- 🔧 Debugging sidecar injection issues
+- ⚠️ Note: Shows duplicates intentionally
+
+**Both ON:**
+- 🛠️ Complete infrastructure visibility
+- 🛠️ Full trace analysis including all hops
+- 🛠️ Advanced troubleshooting
+
 ## Query Parameter Stripping
 
 By default, the analyzer **strips query parameters** from URLs to group similar endpoints together.

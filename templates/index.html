@@ -40,6 +40,18 @@
                             <span>Strip query parameters from URLs (recommended)</span>
                         </label>
                         <p class="option-help">Groups similar endpoints together by removing query strings like ?param=value</p>
+                        
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="include_gateway_services" id="includeGatewayServices">
+                            <span>Include Gateway Services</span>
+                        </label>
+                        <p class="option-help">Include services that only forward requests (API gateways, load balancers, proxies). By default, only services with business logic (SERVER spans) are counted.</p>
+                        
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="include_service_mesh" id="includeServiceMesh">
+                            <span>Include Service Mesh Spans</span>
+                        </label>
+                        <p class="option-help">Include Istio/Envoy sidecar spans in the analysis. This will show duplicate entries for each logical operation (both application and sidecar spans). Useful for diagnosing service mesh overhead. By default, sidecar duplicates are filtered out.</p>
                     </div>
                     
                     <button type="submit" class="btn btn-primary">
