@@ -7,9 +7,23 @@ Parses OpenTelemetry trace JSON files and analyzes HTTP endpoints and Kafka/mess
 import ijson
 import re
 from collections import defaultdict
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, TypedDict, DefaultDict
 import sys
 from urllib.parse import urlparse
+
+
+class EndpointStats(TypedDict):
+    count: int
+    total_time_ms: float
+    total_self_time_ms: float
+    error_count: int
+    error_messages: DefaultDict[str, int]
+
+class KafkaStats(TypedDict):
+    count: int
+    total_time_ms: float
+    error_count: int
+    error_messages: DefaultDict[str, int]
 
 
 class TraceAnalyzer:
@@ -24,9 +38,9 @@ class TraceAnalyzer:
         self.strip_query_params = strip_query_params
         
         # Data structures for flat analysis
-        self.endpoint_params = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0})
-        self.service_calls = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0})
-        self.kafka_messages = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0})
+        self.endpoint_params: DefaultDict[Tuple, EndpointStats] = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0, 'error_count': 0, 'error_messages': defaultdict(int)})
+        self.service_calls: DefaultDict[Tuple, EndpointStats] = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0, 'error_count': 0, 'error_messages': defaultdict(int)})
+        self.kafka_messages: DefaultDict[Tuple, KafkaStats] = defaultdict(lambda: {'count': 0, 'total_time_ms': 0.0, 'error_count': 0, 'error_messages': defaultdict(int)})
         
         # Data structures for hierarchical analysis
         self.traces = defaultdict(list)
@@ -199,6 +213,14 @@ class TraceAnalyzer:
         print(f"Found {len(self.service_calls)} unique outgoing call combinations (CLIENT spans)")
         print(f"Found {len(self.kafka_messages)} unique Kafka/messaging operations")
 
+        total_errors = sum(e['error_count'] for e in self.endpoint_params.values()) + \
+                       sum(e['error_count'] for e in self.service_calls.values()) + \
+                       sum(e['error_count'] for e in self.kafka_messages.values())
+        total_error_endpoints = len([k for k, v in self.endpoint_params.items() if v['error_count'] > 0]) + \
+                                len([k for k, v in self.service_calls.items() if v['error_count'] > 0]) + \
+                                len([k for k, v in self.kafka_messages.items() if v['error_count'] > 0])
+        print(f"Found {total_errors} total errors across {total_error_endpoints} unique endpoints/operations")
+
     def _process_collected_traces(self):
         """
         Iterate through each collected trace, build its hierarchy, calculate
@@ -295,9 +317,13 @@ class TraceAnalyzer:
             parent_kind = parent_node['span'].get('kind') if parent_node else None
 
             # Read the final, correct time values from the node.
-            # These were calculated by _calculate_hierarchy_timings.
             total_time = node['total_time_ms']
             self_time = node['self_time_ms']
+
+            # Check for errors
+            span_status = span.get('status', {})
+            is_error = span_status.get('code') == 'STATUS_CODE_ERROR'
+            error_message = span_status.get('message', 'Unknown Error') if is_error else None
 
             http_path = self.extract_http_path(attributes)
             if http_path:
@@ -310,6 +336,9 @@ class TraceAnalyzer:
                     self.endpoint_params[key]['count'] += 1
                     self.endpoint_params[key]['total_time_ms'] += total_time
                     self.endpoint_params[key]['total_self_time_ms'] += self_time
+                    if is_error and error_message:
+                        self.endpoint_params[key]['error_count'] += 1
+                        self.endpoint_params[key]['error_messages'][error_message] += 1
                 
                 elif span_kind == 'SPAN_KIND_CLIENT' and parent_kind != 'SPAN_KIND_CLIENT':
                     target_service = self.extract_target_service_from_url(http_path)
@@ -317,12 +346,18 @@ class TraceAnalyzer:
                     self.service_calls[key]['count'] += 1
                     self.service_calls[key]['total_time_ms'] += total_time
                     self.service_calls[key]['total_self_time_ms'] += self_time
+                    if is_error and error_message:
+                        self.service_calls[key]['error_count'] += 1
+                        self.service_calls[key]['error_messages'][error_message] += 1
             else:
                 op_type, msg_type, details = self.extract_kafka_info(span, attributes)
                 if op_type in ['consumer', 'producer']:
                     key = (node['service_name'], op_type, msg_type, details)
                     self.kafka_messages[key]['count'] += 1
                     self.kafka_messages[key]['total_time_ms'] += total_time
+                    if is_error and error_message:
+                        self.kafka_messages[key]['error_count'] += 1
+                        self.kafka_messages[key]['error_messages'][error_message] += 1
 
     def _calculate_hierarchy_timings(self, node: Dict):
         """
