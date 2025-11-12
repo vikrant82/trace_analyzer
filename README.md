@@ -90,6 +90,22 @@ Trace_Analyser/
 pip install -r requirements.txt
 ```
 
+## Sample Trace Files
+
+The repository includes two example trace files:
+
+### sample-trace.json (Generic Example)
+A non-proprietary trace file with example microservices architecture:
+- **4 services**: api-gateway, user-service, database-service, notification-service
+- **6 spans** across 2 traces
+- **Demonstrates**: HTTP request chains, service-to-service calls, Kafka messaging
+- **Use case**: Quick testing, examples, demonstrations without proprietary data
+
+Test it:
+```bash
+python analyze_trace.py sample-trace.json --include-gateway
+```
+
 ## Docker Deployment
 
 ### Using Docker
