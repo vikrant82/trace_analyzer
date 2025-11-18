@@ -33,22 +33,72 @@ Trace Analyzer is a powerful OpenTelemetry trace analysis tool that processes tr
 - Accurate timing calculations (Total Time + Self Time per endpoint)
 - Error tracking with counts and messages
 
-## Project Structure
+## Project Structure (Modular Architecture)
+
+### Main Entry Points
+- `analyze_trace.py` - CLI facade (59 lines, backward-compatible)
+- `app.py` - Flask web application (127 lines)
+
+### Core Package (`trace_analyzer/`)
+
+#### Core (`trace_analyzer/core/`)
+- `types.py` - Type definitions and data structures
+- `analyzer.py` - Main TraceAnalyzer orchestration class (70 statements, 83% coverage)
+
+#### Extractors (`trace_analyzer/extractors/`)
+- `http_extractor.py` - HTTP endpoint extraction and classification
+- `kafka_extractor.py` - Kafka/messaging operation detection
+- `path_normalizer.py` - URL parameter normalization (96% coverage)
+
+#### Processors (`trace_analyzer/processors/`)
+- `file_processor.py` - Streaming JSON file reading (91% coverage)
+- `hierarchy_builder.py` - Builds span parent-child relationships (87% coverage)
+- `timing_calculator.py` - Calculates total and self-time (94% coverage)
+- `normalizer.py` - Normalizes HTTP/Kafka operations (96% coverage)
+- `aggregator.py` - Aggregates metrics per endpoint (84% coverage)
+- `metrics_populator.py` - Populates final metric structures (85% coverage)
+
+#### Filters (`trace_analyzer/filters/`)
+- `service_mesh_filter.py` - Eliminates Istio/Envoy duplicates
+
+#### Formatters (`trace_analyzer/formatters/`)
+- `time_formatter.py` - Formats timing values (100% test coverage)
+
+#### Web (`trace_analyzer/web/`)
+- `result_builder.py` - Builds web response data structures
+
+### Supporting Files
 ```
-Trace_Analyser/
-├── analyze_trace.py      # Core analysis engine (TraceAnalyzer class)
-├── app.py                # Flask web application
-├── requirements.txt      # Python dependencies
-├── templates/            # Jinja2 HTML templates
-│   ├── index.html       # Upload page
-│   └── results.html     # Results page with trace hierarchy
-├── static/              # CSS styling
-│   └── style.css
-├── README.md            # Full documentation
-├── QUICKSTART.md        # Quick start guide
-├── architecture_summary.md  # Architecture deep-dive
-├── improvements.md      # Proposed enhancements
-├── Dockerfile           # Docker image definition
-├── docker-compose.yml   # Docker Compose configuration
-└── .github/             # GitHub workflows (if any)
+templates/           # Jinja2 HTML templates
+static/             # CSS styling
+requirements.txt    # Python dependencies
+pytest.ini          # Test configuration
+sample-trace.json   # Generic example trace (non-proprietary)
+test-trace.json     # Real-world trace for testing
 ```
+
+### Documentation
+- `README.md` - Full documentation
+- `QUICKSTART.md` - Quick start guide
+- `TESTING.md` - Comprehensive testing guide
+- `TEST_SUMMARY.md` - Test results and coverage
+- `DOCUMENTATION_INDEX.md` - Central documentation index
+- `architecture_summary.md` - Architecture deep-dive
+- `improvements.md` - Proposed enhancements
+- `trace_analysis.md` - Analysis insights
+
+### Tests (`tests/`)
+```
+tests/
+├── conftest.py              # 9 shared fixtures
+├── unit/                    # 52 unit tests (5 files)
+└── integration/             # 7 integration tests (100% passing)
+```
+
+## Refactoring Achievement
+- **Before**: 1,033-line monolithic analyze_trace.py
+- **After**: 14 modular files across 6 subdirectories
+- **Backward Compatibility**: Original CLI and web interfaces unchanged
+- **Test Coverage**: 73% with comprehensive test suite
+- **Lines of Code**: analyze_trace.py: 1,033 → 59 lines
+

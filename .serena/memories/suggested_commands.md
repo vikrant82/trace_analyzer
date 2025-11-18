@@ -69,10 +69,40 @@ docker-compose down
 
 ## Testing
 
+### Automated Testing with pytest
+```bash
+# Activate virtual environment first
+source venv/bin/activate
+
+# Run all tests with verbose output
+pytest tests/ -v
+
+# Run all tests with coverage report
+pytest tests/ -v --cov=trace_analyzer --cov-report=html
+
+# Integration tests only (should be 100% passing)
+pytest tests/integration/ -v
+
+# Unit tests only
+pytest tests/unit/ -v
+
+# Specific test file
+pytest tests/unit/test_time_formatter.py -v
+
+# Specific test case
+pytest tests/integration/test_analyzer_integration.py::TestTraceAnalyzerIntegration::test_analyzer_with_sample_trace_file -v
+
+# View coverage report
+open htmlcov/index.html  # macOS
+```
+
 ### Manual Testing
 ```bash
-# Test CLI with sample file
-python3 analyze_trace.py bug-archanata.json
+# Test CLI with generic sample file
+python3 analyze_trace.py sample-trace.json --include-gateway
+
+# Test CLI with real-world trace
+python3 analyze_trace.py test-trace.json
 
 # Test web app
 python3 app.py

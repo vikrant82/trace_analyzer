@@ -12,10 +12,33 @@ python3 -m py_compile <modified_file>.py
 ### Manual Testing
 - If modified `analyze_trace.py`:
   ```bash
-  python3 analyze_trace.py bug-archanata.json
+  # Test with sample trace (generic)
+  python3 analyze_trace.py sample-trace.json --include-gateway
+  
+  # Test with real-world trace
+  python3 analyze_trace.py test-trace.json
   ```
 - If modified `app.py` or templates:
   ```bash
+  python3 app.py
+  # Test in browser at http://localhost:5001
+  ```
+
+### Automated Testing (pytest)
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run all tests with coverage
+pytest tests/ -v --cov=trace_analyzer --cov-report=html
+
+# Integration tests only (all should pass)
+pytest tests/integration/ -v
+
+# Unit tests by module
+pytest tests/unit/test_time_formatter.py -v
+pytest tests/unit/test_http_extractor.py -v
+bash
   python3 app.py
   # Test in browser at http://localhost:5001
   ```
@@ -42,6 +65,11 @@ curl -X POST -F "file=@bug-archanata.json" http://localhost:5001/api/analyze
 - [ ] Resources cleaned up (temp files deleted)
 
 ## 3. Functionality Validation
+
+### Test Suite Status
+- **Integration Tests**: 7/7 passing (100%) - MUST remain passing
+- **Unit Tests**: 34/59 passing (58%) - improvements ongoing
+- **Code Coverage**: 73% baseline - do not decrease
 
 ### Core Features (if modified)
 - [ ] Five-pass analysis pipeline works correctly

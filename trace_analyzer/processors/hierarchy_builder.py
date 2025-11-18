@@ -45,12 +45,31 @@ class HierarchyBuilder:
                 span.get('resource', {}).get('attributes', [])
             )
             
+            # Extract error information from span
+            span_status = span.get('status', {})
+            status_code = span_status.get('code', 0)
+            is_error = status_code in [1, 2]
+            error_message = (span_status.get('message') or 'Unknown Error') if is_error else None
+            
+            # Extract HTTP status code from attributes if available
+            http_status_code = None
+            for attr in span.get('attributes', []):
+                if attr.get('key') == 'http.status_code':
+                    value = attr.get('value', {})
+                    http_status_code = value.get('intValue') or value.get('stringValue')
+                    if http_status_code:
+                        http_status_code = int(http_status_code) if isinstance(http_status_code, str) else http_status_code
+                    break
+            
             span_nodes[span_id] = {
                 'span': span,
                 'service_name': service_name,
                 'children': [],
                 'total_time_ms': duration_ms,
                 'self_time_ms': duration_ms,
+                'is_error': is_error,
+                'error_message': error_message,
+                'http_status_code': http_status_code,
             }
             
             if (span.get('kind') == 'SPAN_KIND_SERVER' and 

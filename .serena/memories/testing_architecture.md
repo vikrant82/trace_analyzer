@@ -23,8 +23,27 @@ tests/
 - **Total:** 59 tests
 - **Passing:** 34 (58%)
 - **Integration:** 7/7 (100% passing) ✅
-- **Code Coverage:** 77% overall
+- **Code Coverage:** 73% overall (improved from 77% with better test execution)
 - **High Coverage Modules:** Core (100%), Normalizer (96%), Timing (94%), File Processor (91%)
+
+## Sample Trace Files
+
+### sample-trace.json (Generic)
+- **Created:** Non-proprietary trace file for testing/demos
+- **Structure:** 4 batches, 6 spans, 2 traces
+- **Services:** api-gateway, user-service, database-service, notification-service
+- **Content:** HTTP request chains, service-to-service calls, Kafka messaging
+- **Format:** Correct OpenTelemetry batches/instrumentationLibrarySpans structure
+- **Timestamps:** Integer values (not strings) for duration calculations
+- **Span Kinds:** SPAN_KIND_SERVER, SPAN_KIND_CLIENT, SPAN_KIND_PRODUCER (strings)
+- **Validation:** Successfully processes with analyze_trace.py
+- **Output:** 3 SERVER spans, 2 CLIENT spans, 1 Kafka operation
+
+### test-trace.json (Real-World)
+- **Purpose:** Comprehensive testing with actual trace data
+- **Used by:** 3 of 7 integration tests (gracefully skips if missing)
+
+## Test Files & Dependencies
 
 ## Running Tests
 

@@ -251,6 +251,288 @@
           ]
         }
       ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "api-gateway"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "8d7cc7d4f4e094fa543fg59520f8bgf4",
+              "spanId": "b23c45d67e89f01a",
+              "parentSpanId": "",
+              "name": "POST /api/orders",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459300000000000,
+              "endTimeUnixNano": 1609459300250000000,
+              "status": {
+                "code": 2,
+                "message": "Service timeout error"
+              },
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/api/orders"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/api/orders"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 504
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "8d7cc7d4f4e094fa543fg59520f8bgf4",
+              "spanId": "c34d56e78f90a12b",
+              "parentSpanId": "b23c45d67e89f01a",
+              "name": "HTTP POST",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459300010000000,
+              "endTimeUnixNano": 1609459300240000000,
+              "status": {
+                "code": 2,
+                "message": "Connection timeout"
+              },
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://order-service:8080/orders"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "order-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "8d7cc7d4f4e094fa543fg59520f8bgf4",
+              "spanId": "d45e67f89a01b23c",
+              "parentSpanId": "c34d56e78f90a12b",
+              "name": "POST /orders",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459300020000000,
+              "endTimeUnixNano": 1609459300230000000,
+              "status": {
+                "code": 2,
+                "message": "Database connection failed"
+              },
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/orders"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/orders"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 503
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "api-gateway"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "9e8dd8e5g5f1a5gb654gh6a631g9chg5",
+              "spanId": "e56f78g90h12c34d",
+              "parentSpanId": "",
+              "name": "GET /api/products/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459400000000000,
+              "endTimeUnixNano": 1609459400080000000,
+              "status": {
+                "code": 2,
+                "message": ""
+              },
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/api/products/99999"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/api/products/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 404
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "9e8dd8e5g5f1a5gb654gh6a631g9chg5",
+              "spanId": "f67g89h01i23d45e",
+              "parentSpanId": "e56f78g90h12c34d",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459400010000000,
+              "endTimeUnixNano": 1609459400070000000,
+              "status": {
+                "code": 2,
+                "message": ""
+              },
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://product-service:8080/products/99999"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "product-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "9e8dd8e5g5f1a5gb654gh6a631g9chg5",
+              "spanId": "g78h90i12j34e56f",
+              "parentSpanId": "f67g89h01i23d45e",
+              "name": "GET /products/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459400020000000,
+              "endTimeUnixNano": 1609459400060000000,
+              "status": {
+                "code": 2,
+                "message": ""
+              },
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/products/99999"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/products/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 404
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }
