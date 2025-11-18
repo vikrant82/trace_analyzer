@@ -19,89 +19,84 @@ class TestServiceMeshFilter:
         config = TraceConfig(include_service_mesh=False)
         filter_obj = ServiceMeshFilter(config)
         
-        attributes = make_attributes(**{"service.name": "istio-ingressgateway"})
+        # Test SERVER span with SERVER parent (should be excluded - sidecar pattern)
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', 'SPAN_KIND_SERVER') == False
         
-        # Should exclude mesh services when disabled
-        assert filter_obj.should_include_server_span(attributes) == False
+        # Test SERVER span with CLIENT parent (should be included - normal call)
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', 'SPAN_KIND_CLIENT') == True
+        
+        # Test SERVER span with no parent (should be included - root span)
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', None) == True
     
     def test_should_include_server_span_mesh_enabled(self):
         """Test including server span when service mesh filtering is enabled."""
         config = TraceConfig(include_service_mesh=True)
         filter_obj = ServiceMeshFilter(config)
         
-        attributes = make_attributes(**{"service.name": "istio-ingressgateway"})
-        
-        # Should include mesh services when enabled
-        assert filter_obj.should_include_server_span(attributes) == True
+        # When mesh is enabled, all SERVER spans should be included
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', 'SPAN_KIND_SERVER') == True
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', 'SPAN_KIND_CLIENT') == True
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', None) == True
     
     def test_should_include_regular_service(self):
-        """Test that regular services are always included."""
+        """Test filtering based on span kind, not service name."""
         config = TraceConfig(include_service_mesh=False)
         filter_obj = ServiceMeshFilter(config)
         
-        attributes = make_attributes(**{"service.name": "user-service"})
-        
-        # Regular services should always be included
-        assert filter_obj.should_include_server_span(attributes) == True
+        # Non-SERVER spans should return False
+        assert filter_obj.should_include_server_span('SPAN_KIND_CLIENT', None) == False
+        assert filter_obj.should_include_server_span('SPAN_KIND_INTERNAL', None) == False
     
     def test_should_include_client_span_envoy(self):
-        """Test filtering Envoy sidecar CLIENT spans."""
+        """Test filtering CLIENT→CLIENT chain (sidecar pattern)."""
         config = TraceConfig(include_service_mesh=False)
         filter_obj = ServiceMeshFilter(config)
         
-        attributes = make_attributes(**{"service.name": "envoy"})
+        # CLIENT span with CLIENT parent should be excluded (app→sidecar pattern)
+        assert filter_obj.should_include_client_span('SPAN_KIND_CLIENT', 'SPAN_KIND_CLIENT') == False
         
-        # Envoy client spans should be excluded when mesh filtering disabled
-        assert filter_obj.should_include_client_span(attributes) == False
+        # CLIENT span with SERVER parent should be included (normal outbound call)
+        assert filter_obj.should_include_client_span('SPAN_KIND_CLIENT', 'SPAN_KIND_SERVER') == True
     
     def test_should_include_client_span_regular(self):
-        """Test including regular CLIENT spans."""
-        config = TraceConfig(include_service_mesh=False)
+        """Test CLIENT span with mesh enabled includes all."""
+        config = TraceConfig(include_service_mesh=True)
         filter_obj = ServiceMeshFilter(config)
         
-        attributes = make_attributes(**{"service.name": "user-service"})
-        
-        # Regular client spans should be included
-        assert filter_obj.should_include_client_span(attributes) == True
+        # All CLIENT spans included when mesh enabled
+        assert filter_obj.should_include_client_span('SPAN_KIND_CLIENT', 'SPAN_KIND_CLIENT') == True
+        assert filter_obj.should_include_client_span('SPAN_KIND_CLIENT', 'SPAN_KIND_SERVER') == True
     
     def test_detect_istio_services(self):
-        """Test detecting various Istio service names."""
-        config = TraceConfig(include_service_mesh=False)
+        """Test span kind filtering with gateway services config."""
+        config = TraceConfig(include_service_mesh=False, include_gateway_services=False)
         filter_obj = ServiceMeshFilter(config)
         
-        istio_services = [
-            "istio-ingressgateway",
-            "istio-egressgateway",
-            "istio-proxy",
-            "istiod"
-        ]
-        
-        for service in istio_services:
-            attributes = make_attributes(**{"service.name": service})
-            assert filter_obj.should_include_server_span(attributes) == False
+        # Strictest mode: only CLIENT parent or root (None) allowed
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', 'SPAN_KIND_CLIENT') == True
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', None) == True
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', 'SPAN_KIND_INTERNAL') == False
+        assert filter_obj.should_include_server_span('SPAN_KIND_SERVER', 'SPAN_KIND_SERVER') == False
     
     def test_detect_envoy_sidecar(self):
-        """Test detecting Envoy sidecar."""
+        """Test non-CLIENT spans return False from should_include_client_span."""
         config = TraceConfig(include_service_mesh=False)
         filter_obj = ServiceMeshFilter(config)
         
-        attributes = make_attributes(**{"service.name": "envoy"})
-        
-        assert filter_obj.should_include_client_span(attributes) == False
+        # Non-CLIENT spans should return False
+        assert filter_obj.should_include_client_span('SPAN_KIND_SERVER', None) == False
+        assert filter_obj.should_include_client_span('SPAN_KIND_INTERNAL', None) == False
     
     def test_should_skip_node_mesh_service(self):
-        """Test skipping hierarchy nodes from mesh services."""
+        """Test skipping nodes with same service name (sidecar duplicate)."""
         config = TraceConfig(include_service_mesh=False)
         filter_obj = ServiceMeshFilter(config)
         
-        node = {
-            "service": "istio-ingressgateway",
-            "method": "GET",
-            "path": "/api/users"
-        }
+        parent_node = {"service_name": "user-service"}
+        node = {"service_name": "user-service"}
         
-        # Mesh service nodes should be skipped
-        assert filter_obj.should_skip_node(node) == True
+        # Same service calling itself indicates sidecar duplicate
+        assert filter_obj.should_skip_node(node, parent_node) == True
     
     def test_should_not_skip_regular_node(self):
         """Test not skipping regular service nodes."""
@@ -138,12 +133,12 @@ class TestServiceMeshFilter:
         assert filter_obj.should_skip_node(regular_node) == False
     
     def test_empty_service_name(self):
-        """Test handling nodes with empty/missing service names."""
+        """Test should_skip_node with missing service names."""
         config = TraceConfig(include_service_mesh=False)
         filter_obj = ServiceMeshFilter(config)
         
-        attributes = make_attributes()  # Empty
+        parent_node = {}  # No service_name
+        node = {"service_name": "user-service"}
         
-        # Should handle gracefully
-        result = filter_obj.should_include_server_span(attributes)
-        assert isinstance(result, bool)
+        # Should not skip when parent has no service_name
+        assert filter_obj.should_skip_node(node, parent_node) == False

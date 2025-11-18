@@ -152,6 +152,11 @@ class HierarchyNormalizer:
                     node['children'] = aggregate_siblings(node.get('children', []), node)
                     node['aggregated'] = False
                     node['count'] = 1
+                    # Ensure error information is preserved for single nodes
+                    if 'is_error' not in node:
+                        node['is_error'] = False
+                        node['error_message'] = None
+                        node['http_status_code'] = None
                     aggregated.append(node)
                 else:
                     # Multiple nodes - aggregate them
@@ -168,6 +173,33 @@ class HierarchyNormalizer:
                     # Recursively aggregate grandchildren (pass first as parent node)
                     aggregated_grandchildren = aggregate_siblings(all_grandchildren, first)
                     
+                    # Aggregate error information: if ANY child has an error, mark the aggregated node as error
+                    any_errors = any(c.get('is_error', False) for c in group_children)
+                    error_count = sum(1 for c in group_children if c.get('is_error', False))
+                    
+                    # Collect all unique error messages
+                    error_messages = set()
+                    http_status_codes = set()
+                    for c in group_children:
+                        if c.get('is_error', False):
+                            if c.get('error_message'):
+                                error_messages.add(c.get('error_message'))
+                            if c.get('http_status_code'):
+                                http_status_codes.add(c.get('http_status_code'))
+                    
+                    # Format error message for aggregated node
+                    if any_errors:
+                        if len(error_messages) == 1:
+                            agg_error_message = list(error_messages)[0]
+                        else:
+                            agg_error_message = f"Multiple errors ({error_count}/{count})"
+                        
+                        # Use most common HTTP status code or first one
+                        agg_http_status = list(http_status_codes)[0] if http_status_codes else None
+                    else:
+                        agg_error_message = None
+                        agg_http_status = None
+                    
                     agg_node = {
                         'span': first['span'].copy(),
                         'service_name': first.get('service_name', ''),
@@ -179,7 +211,11 @@ class HierarchyNormalizer:
                         'children': aggregated_grandchildren,
                         'aggregated': True,
                         'count': count,
-                        'avg_time_ms': total_time / count if count > 0 else 0
+                        'avg_time_ms': total_time / count if count > 0 else 0,
+                        'is_error': any_errors,
+                        'error_message': agg_error_message,
+                        'http_status_code': agg_http_status,
+                        'error_count': error_count
                     }
                     aggregated.append(agg_node)
             
