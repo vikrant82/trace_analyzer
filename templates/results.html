@@ -10,11 +10,16 @@
     {% macro render_trace_node(node, loop_index, total_trace_time, parent_total_time) %}
     {# Calculate percentage of total trace time #}
     {% set total_perc = (node.total_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
+    {% set self_perc = (node.self_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
     
+    {# Default expansion logic: Only expand nodes contributing > 10% to total time #}
+    {% set initial_state = 'expanded' if (node.children and total_perc >= 10) else 'collapsed' if node.children else '' %}
+
     <li class="{{ 'collapsible' if node.children }} trace-node {{ 'error-span' if node.is_error }}" 
-        data-state="{{ 'expanded' if node.children else '' }}"
+        data-state="{{ initial_state }}"
         data-total-time="{{ node.total_time_ms }}"
         data-trace-percent="{{ "%.1f"|format(total_perc) }}"
+        data-self-percent="{{ "%.1f"|format(self_perc) }}"
         {% if node.is_error %}
         data-error="true"
         data-error-message="{{ node.error_message }}"
@@ -456,12 +461,17 @@
                     
                     allNodes.forEach(node => {
                         const tracePercent = parseFloat(node.dataset.tracePercent || 0);
+                        const selfPercent = parseFloat(node.dataset.selfPercent || 0);
                         
                         // Remove all highlight classes
-                        node.classList.remove('time-highlighted');
+                        node.classList.remove('time-highlighted', 'self-time-highlighted');
                         
                         // Add highlight if above threshold
-                        if (tracePercent >= threshold) {
+                        if (selfPercent >= threshold) {
+                            // High self-time means this specific node is slow (Bottleneck)
+                            node.classList.add('self-time-highlighted');
+                        } else if (tracePercent >= threshold) {
+                            // High total-time means this is part of the slow path (Hot Path)
                             node.classList.add('time-highlighted');
                         }
                     });

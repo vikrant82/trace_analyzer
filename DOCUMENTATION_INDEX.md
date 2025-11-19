@@ -109,7 +109,17 @@ pytest tests/ -v --cov=trace_analyzer --cov-report=html
 
 ---
 
-### 8. **improvements.md** - Enhancement Proposals
+### 8. **VISUALIZATION_GUIDE.md** - Visualization Logic ⭐ NEW
+- Dual-highlighting system explanation
+- Hot Path vs Bottleneck distinction
+- Interactive controls guide
+
+**Path:** `/VISUALIZATION_GUIDE.md`
+**Audience:** Users, Developers
+
+---
+
+### 9. **improvements.md** - Enhancement Proposals
 - Proposed improvements
 - Feature requests
 - Performance optimizations
@@ -122,7 +132,7 @@ pytest tests/ -v --cov=trace_analyzer --cov-report=html
 
 ## Configuration Files
 
-### 9. **requirements.txt** - Python Dependencies
+### 10. **requirements.txt** - Python Dependencies
 Core dependencies:
 - `ijson>=3.2.0` - JSON streaming
 - `flask>=3.0.0` - Web framework
@@ -137,7 +147,7 @@ Testing dependencies:
 
 ---
 
-### 10. **pytest.ini** - Test Configuration ⭐ NEW
+### 11. **pytest.ini** - Test Configuration ⭐ NEW
 - Test discovery patterns
 - Coverage settings
 - Output formatting
@@ -148,7 +158,7 @@ Testing dependencies:
 
 ---
 
-### 11. **Dockerfile** - Container Configuration
+### 12. **Dockerfile** - Container Configuration
 - Docker image definition
 - Dependencies installation
 - Application setup
@@ -157,7 +167,7 @@ Testing dependencies:
 
 ---
 
-### 12. **docker-compose.yml** - Container Orchestration
+### 13. **docker-compose.yml** - Container Orchestration
 - Service definitions
 - Port mappings
 - Volume mounts
@@ -202,7 +212,7 @@ trace_analyzer/
 
 ## Test Documentation
 
-### 13. **tests/** - Test Suite
+### 14. **tests/** - Test Suite
 - Unit tests for individual modules
 - Integration tests for workflows
 - Fixtures and test data
@@ -223,7 +233,7 @@ tests/
 
 ## Sample Files
 
-### 14. **test-trace.json** - Sample Trace Data
+### 15. **test-trace.json** - Sample Trace Data
 - Real OpenTelemetry trace data
 - Used for testing and examples
 - 76 spans, 1 trace
@@ -235,7 +245,7 @@ tests/
 
 ## Scripts
 
-### 15. **analyze_trace.py** - CLI Tool
+### 16. **analyze_trace.py** - CLI Tool
 Backward compatibility facade for command-line trace analysis.
 
 **Usage:**
@@ -248,7 +258,7 @@ python analyze_trace.py trace.json --include-service-mesh
 
 ---
 
-### 16. **app.py** - Web Application
+### 17. **app.py** - Web Application
 Flask web server for browser-based trace analysis.
 
 **Usage:**
@@ -263,14 +273,14 @@ python app.py
 
 ## Static Assets
 
-### 17. **static/** - Web Resources
+### 18. **static/** - Web Resources
 - `style.css` - Web interface styling
 
 **Path:** `/static/`
 
 ---
 
-### 18. **templates/** - HTML Templates
+### 19. **templates/** - HTML Templates
 - `index.html` - Upload page
 - `results.html` - Analysis results display
 
@@ -280,7 +290,7 @@ python app.py
 
 ## License
 
-### 19. **LICENSE** - Project License
+### 20. **LICENSE** - Project License
 Software license and terms of use.
 
 **Path:** `/LICENSE`
