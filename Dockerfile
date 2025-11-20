@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY analyze_trace.py .
 COPY app.py .
+COPY trace_analyzer/ ./trace_analyzer/
 COPY templates/ ./templates/
 COPY static/ ./static/
 
