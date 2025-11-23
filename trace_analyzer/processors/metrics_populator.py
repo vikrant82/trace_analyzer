@@ -70,13 +70,10 @@ class MetricsPopulator:
             total_time = node['total_time_ms']
             self_time = node['self_time_ms']
             
-            # Process the span itself
-            span_status = span.get('status', {})
-            # OpenTelemetry status codes: 0=UNSET/OK, 1=ERROR, 2=ERROR
-            status_code = span_status.get('code')
-            is_error = status_code in [1, 2]
-            # Use 'or' to handle empty string messages in OpenTelemetry traces
-            error_message = (span_status.get('message') or 'Unknown Error') if is_error else None
+            # Use intelligent error extraction
+            from ..extractors.error_extractor import ErrorExtractor
+            is_error, error_message, _ = ErrorExtractor.extract_error_details(span)
+
             
             http_path = self.http_extractor.extract_http_path(attributes)
             if http_path:

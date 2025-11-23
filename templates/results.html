@@ -1,32 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analysis Results - Trace Endpoint Analyzer</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
     {% macro render_trace_node(node, loop_index, total_trace_time, parent_total_time) %}
     {# Calculate percentage of total trace time #}
     {% set total_perc = (node.total_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
     {% set self_perc = (node.self_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
-    
-    {# Default expansion logic: Only expand nodes contributing > 10% to total time #}
-    {% set initial_state = 'expanded' if (node.children and total_perc >= 10) else 'collapsed' if node.children else '' %}
 
-    <li class="{{ 'collapsible' if node.children }} trace-node {{ 'error-span' if node.is_error }}" 
-        data-state="{{ initial_state }}"
-        data-total-time="{{ node.total_time_ms }}"
-        data-trace-percent="{{ "%.1f"|format(total_perc) }}"
-        data-self-percent="{{ "%.1f"|format(self_perc) }}"
-        {% if node.is_error %}
-        data-error="true"
-        data-error-message="{{ node.error_message }}"
-        {% if node.http_status_code %}
-        data-http-status="{{ node.http_status_code }}"
-        {% endif %}
-        {% endif %}>
+    {# Default expansion logic: Only expand nodes contributing > 10% to total time #}
+    {% set initial_state = 'expanded' if (node.children and total_perc >= 10) else 'collapsed' if node.children else ''
+    %}
+
+    <li class="{{ 'collapsible' if node.children }} trace-node {{ 'error-span' if node.is_error }}"
+        data-state="{{ initial_state }}" data-total-time="{{ node.total_time_ms }}" data-trace-percent="{{ "
+        %.1f"|format(total_perc) }}" data-self-percent="{{ " %.1f"|format(self_perc) }}" {% if node.is_error %}
+        data-error="true" data-error-message="{{ node.error_message }}" {% if node.http_status_code %}
+        data-http-status="{{ node.http_status_code }}" {% endif %} {% endif %}>
         <div class="node-content">
             <div class="node-main">
                 {% if node.children %}
@@ -45,17 +41,19 @@
                 {% if node.aggregated %}
                 <span class="metric avg-time"><strong>Avg:</strong> {{ "%.2f"|format(node.avg_time_ms) }} ms</span>
                 {% endif %}
-                
+
                 {% if node.is_error %}
                 <span class="metric error-badge" title="{{ node.error_message }}">
-                    <strong>❌ Error{% if node.aggregated and node.error_count %} ({{ node.error_count }}/{{ node.count }}){% elif node.http_status_code %} ({{ node.http_status_code }}){% endif %}</strong>
+                    <strong>❌ Error{% if node.aggregated and node.error_count %} ({{ node.error_count }}/{{ node.count
+                        }}){% elif node.http_status_code %} ({{ node.http_status_code }}){% endif %}</strong>
                 </span>
                 {% endif %}
-                
+
                 <span class="metric total-time">
-                    <strong>Total:</strong> {{ "%.2f"|format(node.total_time_ms) }} ms ({{ "%.1f"|format(total_perc) }}%)
+                    <strong>Total:</strong> {{ "%.2f"|format(node.total_time_ms) }} ms ({{ "%.1f"|format(total_perc)
+                    }}%)
                 </span>
-                
+
                 {% set self_perc = (node.self_time_ms / total_trace_time * 100) if total_trace_time > 0 else 0 %}
                 <span class="metric self-time">
                     <strong>Self:</strong> {{ "%.2f"|format(node.self_time_ms) }} ms ({{ "%.1f"|format(self_perc) }}%)
@@ -130,6 +128,13 @@
                 <div class="hierarchy-controls">
                     <button class="btn btn-sm btn-expand-all">Expand All</button>
                     <button class="btn btn-sm btn-collapse-all">Collapse All</button>
+                    <div class="error-filter-container">
+                        <label for="show-errors-only"
+                            style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="show-errors-only" style="cursor: pointer;">
+                            <span>Show Errors Only</span>
+                        </label>
+                    </div>
                     <div class="highlight-slider-container">
                         <label for="highlight-threshold">
                             Highlight nodes contributing: <strong><span id="threshold-value">10</span>%+</strong>
@@ -138,13 +143,14 @@
                         <span class="slider-hint">Move slider to adjust highlighting threshold</span>
                     </div>
                 </div>
-                
+
                 {% for trace_id, hierarchy in results.trace_hierarchies.items() %}
                 <div class="trace-detail">
                     <div class="trace-header">
                         <h3>Trace ID: <span class="trace-id">{{ trace_id }}</span></h3>
                         <div class="trace-summary-stats">
-                            <span><strong>Wall-Clock Duration:</strong> {{ results.trace_summary[trace_id].wall_clock_duration_formatted }}</span>
+                            <span><strong>Wall-Clock Duration:</strong> {{
+                                results.trace_summary[trace_id].wall_clock_duration_formatted }}</span>
                             <span><strong>Total Spans:</strong> {{ results.trace_summary[trace_id].span_count }}</span>
                         </div>
                     </div>
@@ -152,7 +158,8 @@
                     <div class="tree">
                         <ul>
                             {% for node in hierarchy.children %}
-                            {{ render_trace_node(node, loop.index, results.trace_summary[trace_id].wall_clock_duration_ms, hierarchy.total_time_ms) }}
+                            {{ render_trace_node(node, loop.index,
+                            results.trace_summary[trace_id].wall_clock_duration_ms, hierarchy.total_time_ms) }}
                             {% endfor %}
                         </ul>
                     </div>
@@ -164,17 +171,18 @@
             <!-- Services Overview -->
             <section class="services-overview">
                 <h2>Services Overview</h2>
-                    <div class="table-wrapper">
-                        <table class="sortable-table">
-                            <thead>
-                                <tr>
-                                    <th>Service Name</th>
-                                    <th class="sortable" data-sort="number">Requests <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="number">Unique Endpoints <span class="sort-icon"></span></th>
-                                </tr>
-                            </thead>
+                <div class="table-wrapper">
+                    <table class="sortable-table">
+                        <thead>
+                            <tr>
+                                <th>Service Name</th>
+                                <th class="sortable" data-sort="number">Requests <span class="sort-icon"></span></th>
+                                <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
+                                <th class="sortable" data-sort="number">Unique Endpoints <span class="sort-icon"></span>
+                                </th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {% for service in results.services.summary %}
                             <tr>
@@ -196,7 +204,7 @@
             <section class="endpoints-section">
                 <h2>Incoming Requests by Service</h2>
                 <p class="section-note">Endpoints sorted by total time (slowest first)</p>
-                
+
                 {% for service in results.services.summary %}
                 <div class="service-detail" id="service-{{ loop.index }}">
                     <h3>{{ service.name }}</h3>
@@ -206,7 +214,7 @@
                         <span><strong>Self Time:</strong> {{ service.total_self_time_formatted }}</span>
                         <span><strong>Unique:</strong> {{ service.unique_combinations }}</span>
                     </div>
-                    
+
                     <div class="table-wrapper">
                         <table class="sortable-table">
                             <thead>
@@ -214,19 +222,21 @@
                                     <th>Normalized Endpoint</th>
                                     <th>Parameter Value</th>
                                     <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span>
+                                    </th>
                                     <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for endpoint in results.services.details[service.name] %}
                                 <tr>
-                                    <td class="endpoint-cell"><span class="http-method">{{ endpoint.http_method }}</span> {{ endpoint.endpoint }}</td>
+                                    <td class="endpoint-cell"><span class="http-method">{{ endpoint.http_method
+                                            }}</span> {{ endpoint.endpoint }}</td>
                                     <td class="param-cell">
                                         {% if endpoint.parameter|length > 50 %}
-                                            <span title="{{ endpoint.parameter }}">{{ endpoint.parameter[:47] }}...</span>
+                                        <span title="{{ endpoint.parameter }}">{{ endpoint.parameter[:47] }}...</span>
                                         {% else %}
-                                            {{ endpoint.parameter }}
+                                        {{ endpoint.parameter }}
                                         {% endif %}
                                     </td>
                                     <td>{{ endpoint.count }}</td>
@@ -246,7 +256,7 @@
             <section class="service-calls-section">
                 <h2>Service-to-Service Calls</h2>
                 <p class="section-note">Outgoing HTTP calls between services, sorted by total time</p>
-                
+
                 {% for call_pair in results.service_calls %}
                 <div class="service-call-detail">
                     <h3>{{ call_pair.caller }} → {{ call_pair.callee }}</h3>
@@ -256,7 +266,7 @@
                         <span><strong>Self Time:</strong> {{ call_pair.total_self_time_formatted }}</span>
                         <span><strong>Unique Endpoints:</strong> {{ call_pair.calls|length }}</span>
                     </div>
-                    
+
                     <div class="table-wrapper">
                         <table class="sortable-table">
                             <thead>
@@ -264,19 +274,21 @@
                                     <th>Normalized Endpoint</th>
                                     <th>Parameter Value</th>
                                     <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span>
+                                    </th>
                                     <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for call in call_pair.calls %}
                                 <tr>
-                                    <td class="endpoint-cell"><span class="http-method">{{ call.http_method }}</span> {{ call.endpoint }}</td>
+                                    <td class="endpoint-cell"><span class="http-method">{{ call.http_method }}</span> {{
+                                        call.endpoint }}</td>
                                     <td class="param-cell">
                                         {% if call.parameter|length > 50 %}
-                                            <span title="{{ call.parameter }}">{{ call.parameter[:47] }}...</span>
+                                        <span title="{{ call.parameter }}">{{ call.parameter[:47] }}...</span>
                                         {% else %}
-                                            {{ call.parameter }}
+                                        {{ call.parameter }}
                                         {% endif %}
                                     </td>
                                     <td>{{ call.count }}</td>
@@ -296,8 +308,9 @@
             {% if results.kafka_operations %}
             <section class="kafka-operations-section">
                 <h2>Kafka/Messaging Operations</h2>
-                <p class="section-note">Kafka consumer/producer operations and message processing, sorted by total time</p>
-                
+                <p class="section-note">Kafka consumer/producer operations and message processing, sorted by total time
+                </p>
+
                 {% for kafka_service in results.kafka_operations %}
                 <div class="kafka-service-detail">
                     <h3>{{ kafka_service.service }}</h3>
@@ -306,7 +319,7 @@
                         <span><strong>Total Time:</strong> {{ kafka_service.total_time_formatted }}</span>
                         <span><strong>Unique Operations:</strong> {{ kafka_service.operations|length }}</span>
                     </div>
-                    
+
                     <div class="table-wrapper">
                         <table class="sortable-table">
                             <thead>
@@ -315,7 +328,8 @@
                                     <th>Message/Span Name</th>
                                     <th>Details</th>
                                     <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -325,9 +339,9 @@
                                     <td class="message-type">{{ operation.message_type }}</td>
                                     <td class="details-cell">
                                         {% if operation.details|length > 60 %}
-                                            <span title="{{ operation.details }}">{{ operation.details[:57] }}...</span>
+                                        <span title="{{ operation.details }}">{{ operation.details[:57] }}...</span>
                                         {% else %}
-                                            {{ operation.details }}
+                                        {{ operation.details }}
                                         {% endif %}
                                     </td>
                                     <td>{{ operation.count }}</td>
@@ -346,8 +360,9 @@
             {% if results.error_analysis %}
             <section class="error-summary-section">
                 <h2>🚨 Error Summary by Service</h2>
-                <p class="section-note">Summary of failed operations (spans marked with an error status), sorted by error count.</p>
-                
+                <p class="section-note">Summary of failed operations (spans marked with an error status), sorted by
+                    error count.</p>
+
                 {% for service, errors in results.error_analysis.items() %}
                 <div class="service-detail">
                     <h3>{{ service }}</h3>
@@ -357,7 +372,8 @@
                                 <tr>
                                     <th>Operation Type</th>
                                     <th>Endpoint / Details</th>
-                                    <th class="sortable" data-sort="number">Error Count <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-sort="number">Error Count <span class="sort-icon"></span>
+                                    </th>
                                     <th>Top Error Messages</th>
                                 </tr>
                             </thead>
@@ -369,15 +385,16 @@
                                         <span class="http-method">{{ error.http_method }}</span>
                                         {{ error.endpoint }}
                                         {% if error.parameter %}
-                                            <span class="param-cell" title="{{ error.parameter }}">({{ error.parameter }})</span>
+                                        <span class="param-cell" title="{{ error.parameter }}">({{ error.parameter
+                                            }})</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ error.error_count }}</td>
                                     <td class="error-messages">
                                         <ul>
-                                        {% for message, count in error.top_messages %}
+                                            {% for message, count in error.top_messages %}
                                             <li><strong>({{ count }}x)</strong> {{ message }}</li>
-                                        {% endfor %}
+                                            {% endfor %}
                                         </ul>
                                     </td>
                                 </tr>
@@ -400,7 +417,7 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Table sorting functionality
             const tables = document.querySelectorAll('.sortable-table');
             tables.forEach(table => {
@@ -417,7 +434,7 @@
             // Trace hierarchy collapse/expand functionality
             const hierarchySection = document.querySelector('.trace-hierarchy-section');
             if (hierarchySection) {
-                hierarchySection.addEventListener('click', function(e) {
+                hierarchySection.addEventListener('click', function (e) {
                     if (e.target.classList.contains('toggle')) {
                         const parentLi = e.target.closest('li.collapsible');
                         if (parentLi) {
@@ -440,32 +457,83 @@
                     allCollapsible.forEach(li => li.dataset.state = 'collapsed');
                 });
 
+                // Error filter checkbox functionality
+                const errorFilterCheckbox = document.getElementById('show-errors-only');
+
+                if (errorFilterCheckbox) {
+                    errorFilterCheckbox.addEventListener('change', function () {
+                        filterErrorNodes(this.checked);
+                    });
+                }
+
+                function filterErrorNodes(showErrorsOnly) {
+                    const allNodes = hierarchySection.querySelectorAll('.trace-node');
+
+                    allNodes.forEach(node => {
+                        if (showErrorsOnly) {
+                            // Only show error nodes and their ancestors
+                            const isError = node.dataset.error === 'true';
+                            const hasErrorDescendant = hasErrorInSubtree(node);
+
+                            if (isError || hasErrorDescendant) {
+                                node.style.display = '';
+                                // Auto-expand nodes with errors to show them
+                                if (node.classList.contains('collapsible') && hasErrorDescendant) {
+                                    node.dataset.state = 'expanded';
+                                }
+                            } else {
+                                node.style.display = 'none';
+                            }
+                        } else {
+                            // Show all nodes
+                            node.style.display = '';
+                        }
+                    });
+                }
+
+                function hasErrorInSubtree(node) {
+                    // Check if this node has error attribute
+                    if (node.dataset.error === 'true') {
+                        return true;
+                    }
+
+                    // Check all descendant nodes
+                    const descendants = node.querySelectorAll('.trace-node');
+                    for (let desc of descendants) {
+                        if (desc.dataset.error === 'true') {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
                 // Highlighting slider functionality
                 const slider = document.getElementById('highlight-threshold');
                 const thresholdDisplay = document.getElementById('threshold-value');
-                
+
                 if (slider && thresholdDisplay) {
                     // Apply initial highlighting
                     updateHighlighting(slider.value);
-                    
+
                     // Update on slider change
-                    slider.addEventListener('input', function() {
+                    slider.addEventListener('input', function () {
                         const threshold = this.value;
                         thresholdDisplay.textContent = threshold;
                         updateHighlighting(threshold);
                     });
                 }
-                
+
                 function updateHighlighting(threshold) {
                     const allNodes = hierarchySection.querySelectorAll('.trace-node');
-                    
+
                     allNodes.forEach(node => {
                         const tracePercent = parseFloat(node.dataset.tracePercent || 0);
                         const selfPercent = parseFloat(node.dataset.selfPercent || 0);
-                        
+
                         // Remove all highlight classes
                         node.classList.remove('time-highlighted', 'self-time-highlighted');
-                        
+
                         // Add highlight if above threshold
                         if (selfPercent >= threshold) {
                             // High self-time means this specific node is slow (Bottleneck)
@@ -482,40 +550,40 @@
         function sortTable(table, columnIndex, sortType) {
             const tbody = table.querySelector('tbody');
             if (!tbody) return;
-            
+
             const rows = Array.from(tbody.querySelectorAll('tr'));
             if (rows.length === 0) return;
-            
+
             const allHeaders = table.querySelectorAll('th');
             const header = allHeaders[columnIndex];
             if (!header) return;
-            
+
             const currentSort = header.dataset.currentSort || 'none';
-            
+
             // Clear all sort indicators
             allHeaders.forEach(th => {
                 th.classList.remove('sort-asc', 'sort-desc');
                 th.dataset.currentSort = 'none';
             });
-            
+
             // Determine sort direction
             let sortOrder = 'asc';
             if (currentSort === 'asc') {
                 sortOrder = 'desc';
             }
-            
+
             // Sort rows
             rows.sort((a, b) => {
                 const aCell = a.cells[columnIndex];
                 const bCell = b.cells[columnIndex];
-                
+
                 if (!aCell || !bCell) return 0;
-                
+
                 const aValue = aCell.textContent.trim();
                 const bValue = bCell.textContent.trim();
-                
+
                 let comparison = 0;
-                
+
                 if (sortType === 'number') {
                     const aNum = parseInt(aValue.replace(/,/g, '')) || 0;
                     const bNum = parseInt(bValue.replace(/,/g, '')) || 0;
@@ -527,13 +595,13 @@
                 } else {
                     comparison = aValue.localeCompare(bValue);
                 }
-                
+
                 return sortOrder === 'asc' ? comparison : -comparison;
             });
-            
+
             // Update table
             rows.forEach(row => tbody.appendChild(row));
-            
+
             // Update sort indicator
             header.classList.add(sortOrder === 'asc' ? 'sort-asc' : 'sort-desc');
             header.dataset.currentSort = sortOrder;
@@ -542,27 +610,28 @@
         function parseTimeToMs(timeStr) {
             // Parse time strings like "12.45 s", "245.50 ms", "2m 15.30s"
             let ms = 0;
-            
+
             // Match minutes
             const minMatch = timeStr.match(/(\d+)m/);
             if (minMatch) {
                 ms += parseInt(minMatch[1]) * 60000;
             }
-            
+
             // Match seconds
             const secMatch = timeStr.match(/([\d.]+)\s*s/);
             if (secMatch) {
                 ms += parseFloat(secMatch[1]) * 1000;
             }
-            
+
             // Match milliseconds
             const msMatch = timeStr.match(/([\d.]+)\s*ms/);
             if (msMatch) {
                 ms += parseFloat(msMatch[1]);
             }
-            
+
             return ms;
         }
     </script>
 </body>
+
 </html>

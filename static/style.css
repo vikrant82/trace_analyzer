@@ -839,3 +839,27 @@ li[data-state="collapsed"] > ul {
 .tree li.error-span[data-error-message]:hover {
     position: relative;
 }
+
+/* Error Filter Checkbox Styling */
+.error-filter-container {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: #fef2f2;
+    border-radius: 6px;
+    border: 1px solid #fecaca;
+    margin-left: 10px;
+}
+
+.error-filter-container label {
+    margin: 0;
+    color: #991b1b;
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+.error-filter-container input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #dc2626;
+}
