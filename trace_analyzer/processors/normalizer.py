@@ -81,9 +81,16 @@ class HierarchyNormalizer:
             """
             Determine if a node is a service mesh sidecar duplicate that should be skipped.
             Returns True if the node should be skipped (and its children lifted to parent).
+            
+            IMPORTANT: Never skip error spans - we want to preserve error information
+            in the hierarchy for visibility.
             """
             if self.config.include_service_mesh:
                 return False  # Don't skip anything when mesh spans are included
+            
+            # Never skip error spans - preserve them for visibility
+            if node.get('is_error', False):
+                return False
             
             # Check for same-service duplicates (service calling itself)
             if parent_node:
