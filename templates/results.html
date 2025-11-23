@@ -135,6 +135,13 @@
                             <span>Show Errors Only</span>
                         </label>
                     </div>
+                    <div class="performance-filter-container">
+                        <label for="show-performance-only"
+                            style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="show-performance-only" style="cursor: pointer;">
+                            <span>Show Performance Issues Only</span>
+                        </label>
+                    </div>
                     <div class="highlight-slider-container">
                         <label for="highlight-threshold">
                             Highlight nodes contributing: <strong><span id="threshold-value">10</span>%+</strong>
@@ -508,6 +515,60 @@
                     return false;
                 }
 
+                // Performance filter checkbox functionality
+                const performanceFilterCheckbox = document.getElementById('show-performance-only');
+
+                if (performanceFilterCheckbox) {
+                    performanceFilterCheckbox.addEventListener('change', function () {
+                        filterPerformanceNodes(this.checked);
+                    });
+                }
+
+                function filterPerformanceNodes(showPerformanceOnly) {
+                    const allNodes = hierarchySection.querySelectorAll('.trace-node');
+
+                    allNodes.forEach(node => {
+                        if (showPerformanceOnly) {
+                            // Only show performance-highlighted nodes and their ancestors
+                            const isHighlighted = node.classList.contains('time-highlighted') ||
+                                node.classList.contains('self-time-highlighted');
+                            const hasHighlightedDescendant = hasHighlightedInSubtree(node);
+
+                            if (isHighlighted || hasHighlightedDescendant) {
+                                node.style.display = '';
+                                // Auto-expand nodes with performance issues to show them
+                                if (node.classList.contains('collapsible') && hasHighlightedDescendant) {
+                                    node.dataset.state = 'expanded';
+                                }
+                            } else {
+                                node.style.display = 'none';
+                            }
+                        } else {
+                            // Show all nodes
+                            node.style.display = '';
+                        }
+                    });
+                }
+
+                function hasHighlightedInSubtree(node) {
+                    // Check if this node is highlighted
+                    if (node.classList.contains('time-highlighted') ||
+                        node.classList.contains('self-time-highlighted')) {
+                        return true;
+                    }
+
+                    // Check all descendant nodes
+                    const descendants = node.querySelectorAll('.trace-node');
+                    for (let desc of descendants) {
+                        if (desc.classList.contains('time-highlighted') ||
+                            desc.classList.contains('self-time-highlighted')) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
                 // Highlighting slider functionality
                 const slider = document.getElementById('highlight-threshold');
                 const thresholdDisplay = document.getElementById('threshold-value');
@@ -543,6 +604,12 @@
                             node.classList.add('time-highlighted');
                         }
                     });
+
+                    // Re-apply performance filter if it's active
+                    const performanceFilterCheckbox = document.getElementById('show-performance-only');
+                    if (performanceFilterCheckbox && performanceFilterCheckbox.checked) {
+                        filterPerformanceNodes(true);
+                    }
                 }
             }
         });
