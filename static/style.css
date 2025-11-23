@@ -198,8 +198,13 @@ header h1 {
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Alert */
@@ -509,7 +514,8 @@ footer a:hover {
         font-size: 0.85rem;
     }
 
-    th, td {
+    th,
+    td {
         padding: 0.5rem;
     }
 }
@@ -520,7 +526,7 @@ footer a:hover {
     background-color: #ffffff;
     padding: 25px;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     margin-bottom: 30px;
 }
 
@@ -639,7 +645,8 @@ footer a:hover {
     align-items: center;
     font-size: 0.9em;
     color: #555;
-    padding-left: 25px; /* Align with prefix */
+    padding-left: 25px;
+    /* Align with prefix */
 }
 
 .node-metrics .metric {
@@ -664,7 +671,7 @@ footer a:hover {
     font-size: 0.8rem;
 }
 
-.tree li.collapsible > .node-content .node-main {
+.tree li.collapsible>.node-content .node-main {
     cursor: pointer;
 }
 
@@ -688,11 +695,11 @@ footer a:hover {
     transition: transform 0.2s;
 }
 
-li[data-state="expanded"] > .node-content .toggle::before {
+li[data-state="expanded"]>.node-content .toggle::before {
     transform: translate(-50%, -50%) rotate(90deg);
 }
 
-li[data-state="collapsed"] > ul {
+li[data-state="collapsed"]>ul {
     display: none;
 }
 
@@ -705,8 +712,9 @@ li[data-state="collapsed"] > ul {
 /* Dynamic highlighting based on slider threshold */
 
 /* Hot Path (High Total Time, Low Self Time) - Orange */
-.tree li.time-highlighted > .node-content {
-    border-left: 4px solid #f59e0b; /* Amber-500 */
+.tree li.time-highlighted>.node-content {
+    border-left: 4px solid #f59e0b;
+    /* Amber-500 */
     padding-left: 12px;
     background: linear-gradient(to right, rgba(245, 158, 11, 0.05), transparent 150px);
 }
@@ -722,15 +730,17 @@ li[data-state="collapsed"] > ul {
 }
 
 /* Bottleneck (High Self Time) - Red */
-.tree li.self-time-highlighted > .node-content {
-    border-left: 4px solid #dc2626; /* Red-600 */
+.tree li.self-time-highlighted>.node-content {
+    border-left: 4px solid #dc2626;
+    /* Red-600 */
     padding-left: 12px;
     background: linear-gradient(to right, rgba(220, 38, 38, 0.1), transparent 200px);
 }
 
 .tree li.self-time-highlighted .node-service {
     font-weight: 700;
-    color: #b91c1c; /* Darker red for text */
+    color: #b91c1c;
+    /* Darker red for text */
 }
 
 .tree li.self-time-highlighted .metric.self-time {
@@ -778,10 +788,10 @@ li[data-state="collapsed"] > ul {
 
 /* Error spans that are ALSO time-highlighted get a combined effect */
 .tree li.error-span.time-highlighted {
-    background: linear-gradient(to right, 
-        rgba(239, 68, 68, 0.08), 
-        rgba(220, 38, 38, 0.05) 150px, 
-        transparent 200px);
+    background: linear-gradient(to right,
+            rgba(239, 68, 68, 0.08),
+            rgba(220, 38, 38, 0.05) 150px,
+            transparent 200px);
     border-left: 4px solid #dc2626;
     border-top: 2px solid rgba(239, 68, 68, 0.2);
     padding-left: 12px;
@@ -795,9 +805,12 @@ li[data-state="collapsed"] > ul {
 }
 
 @keyframes pulse-error {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
     }
+
     50% {
         opacity: 0.6;
     }
@@ -862,4 +875,28 @@ li[data-state="collapsed"] > ul {
     width: 16px;
     height: 16px;
     accent-color: #dc2626;
+}
+
+/* Performance Filter Checkbox Styling */
+.performance-filter-container {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: #fffbeb;
+    border-radius: 6px;
+    border: 1px solid #fde68a;
+    margin-left: 10px;
+}
+
+.performance-filter-container label {
+    margin: 0;
+    color: #92400e;
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+.performance-filter-container input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #f59e0b;
 }
