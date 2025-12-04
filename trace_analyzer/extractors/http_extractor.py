@@ -13,7 +13,8 @@ class HttpExtractor:
     def extract_http_path(attributes: List[Dict]) -> str:
         """
         Extract HTTP path/URL from span attributes.
-        Searches for 'http.url', 'http.target', and 'http.path'.
+        Prefers 'http.route' (normalized template path) over actual paths.
+        Falls back to 'http.url', 'http.target', and 'http.path'.
         
         Args:
             attributes: List of span attribute dictionaries
@@ -21,6 +22,15 @@ class HttpExtractor:
         Returns:
             HTTP path/URL string or empty string if not found
         """
+        # First check for http.route (normalized template path like /users/{id})
+        for attr in attributes:
+            if attr.get('key') == 'http.route':
+                value = attr.get('value', {})
+                route = value.get('stringValue', '')
+                if route:
+                    return route
+        
+        # Fall back to actual path attributes
         for attr in attributes:
             if attr.get('key') in ['http.url', 'http.target', 'http.path']:
                 value = attr.get('value', {})

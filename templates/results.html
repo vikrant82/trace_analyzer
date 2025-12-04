@@ -58,6 +58,21 @@
                 <span class="metric self-time">
                     <strong>Self:</strong> {{ "%.2f"|format(node.self_time_ms) }} ms ({{ "%.1f"|format(self_perc) }}%)
                 </span>
+                
+                {# Parallelism indicator on aggregated child nodes (the calls that are parallelized) #}
+                {% if node.aggregated and node.parallelism_factor is defined and node.parallelism_factor > 1 and node.wall_clock_ms %}
+                <span class="metric parallelism-info" title="These {{ node.count }} calls ran in parallel: {{ '%.2f'|format(node.total_time_ms) }}ms cumulative / {{ '%.2f'|format(node.wall_clock_ms) }}ms effective">
+                    <strong>⚡ {{ "%.1f"|format(node.parallelism_factor) }}× parallel</strong>
+                    <span class="effective-time">({{ "%.2f"|format(node.wall_clock_ms) }}ms effective)</span>
+                </span>
+                {% endif %}
+                
+                {# Visual indicator on parent nodes that have parallel children #}
+                {% if node.has_parallel_children %}
+                <span class="metric has-parallel-badge" title="This node has children running in parallel">
+                    ⊗
+                </span>
+                {% endif %}
             </div>
         </div>
         {% if node.children %}

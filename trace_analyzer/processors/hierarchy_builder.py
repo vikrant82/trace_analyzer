@@ -39,8 +39,9 @@ class HierarchyBuilder:
             if not span_id:
                 continue
             
-            duration_ms = (span.get('endTimeUnixNano', 0) - 
-                          span.get('startTimeUnixNano', 0)) / 1_000_000.0
+            start_time_ns = span.get('startTimeUnixNano', 0)
+            end_time_ns = span.get('endTimeUnixNano', 0)
+            duration_ms = (end_time_ns - start_time_ns) / 1_000_000.0
             service_name = self.http_extractor.extract_service_name(
                 span.get('resource', {}).get('attributes', [])
             )
@@ -56,6 +57,8 @@ class HierarchyBuilder:
                 'children': [],
                 'total_time_ms': duration_ms,
                 'self_time_ms': duration_ms,
+                'start_time_ns': start_time_ns,
+                'end_time_ns': end_time_ns,
                 'is_error': is_error,
                 'error_message': error_message,
                 'http_status_code': http_status_code,
@@ -83,12 +86,17 @@ class HierarchyBuilder:
                 root_spans.append(node)
         
         # Create artificial root if multiple root spans exist
+        # Calculate time bounds from root spans
+        root_start = min((s.get('start_time_ns', 0) for s in root_spans), default=0)
+        root_end = max((s.get('end_time_ns', 0) for s in root_spans), default=0)
         root = {
             'span': {'name': 'Trace Root'},
             'service_name': 'Trace',
             'children': root_spans,
             'total_time_ms': sum(s['total_time_ms'] for s in root_spans),
-            'self_time_ms': 0
+            'self_time_ms': 0,
+            'start_time_ns': root_start,
+            'end_time_ns': root_end,
         }
         
         return root, span_nodes
