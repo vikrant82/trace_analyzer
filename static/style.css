@@ -750,6 +750,37 @@ li[data-state="collapsed"]>ul {
     color: #991b1b;
 }
 
+/* Parallelism indicator styling */
+.metric.parallelism-info {
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #1e40af;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.metric.parallelism-info strong {
+    color: #1e40af;
+}
+
+.metric.parallelism-info .effective-time {
+    color: #3b82f6;
+    font-size: 0.9em;
+    margin-left: 4px;
+}
+
+/* Parent node with parallel children indicator */
+.metric.has-parallel-badge {
+    background-color: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #6d28d9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    cursor: help;
+}
+
 /* Slider styling */
 .highlight-slider-container {
     display: flex;

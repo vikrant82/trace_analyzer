@@ -533,6 +533,367 @@
           ]
         }
       ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "batch-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "h89i01j23k45f67g",
+              "parentSpanId": "",
+              "name": "POST /api/batch/process",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459500000000000,
+              "endTimeUnixNano": 1609459500300000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/api/batch/process"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/api/batch/process"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "i90j12k34l56g78h",
+              "parentSpanId": "h89i01j23k45f67g",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459500010000000,
+              "endTimeUnixNano": 1609459500110000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://data-service:8080/items/item-001"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "j01k23l45m67h89i",
+              "parentSpanId": "h89i01j23k45f67g",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459500015000000,
+              "endTimeUnixNano": 1609459500105000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://data-service:8080/items/item-002"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "k12l34m56n78i90j",
+              "parentSpanId": "h89i01j23k45f67g",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459500020000000,
+              "endTimeUnixNano": 1609459500120000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://data-service:8080/items/item-003"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "l23m45n67o89j01k",
+              "parentSpanId": "h89i01j23k45f67g",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459500025000000,
+              "endTimeUnixNano": 1609459500115000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://data-service:8080/items/item-004"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "m34n56o78p90k12l",
+              "parentSpanId": "h89i01j23k45f67g",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459500030000000,
+              "endTimeUnixNano": 1609459500125000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://data-service:8080/items/item-005"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "data-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "n45o67p89q01l23m",
+              "parentSpanId": "i90j12k34l56g78h",
+              "name": "GET /items/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459500020000000,
+              "endTimeUnixNano": 1609459500100000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/items/item-001"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/items/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "o56p78q90r12m34n",
+              "parentSpanId": "j01k23l45m67h89i",
+              "name": "GET /items/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459500025000000,
+              "endTimeUnixNano": 1609459500095000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/items/item-002"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/items/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "p67q89r01s23n45o",
+              "parentSpanId": "k12l34m56n78i90j",
+              "name": "GET /items/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459500030000000,
+              "endTimeUnixNano": 1609459500110000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/items/item-003"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/items/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "q78r90s12t34o56p",
+              "parentSpanId": "l23m45n67o89j01k",
+              "name": "GET /items/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459500035000000,
+              "endTimeUnixNano": 1609459500105000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/items/item-004"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/items/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "af1ee9f6h6g2b6hc765hi7b742hadi6",
+              "spanId": "r89s01t23u45p67q",
+              "parentSpanId": "m34n56o78p90k12l",
+              "name": "GET /items/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459500040000000,
+              "endTimeUnixNano": 1609459500115000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.target",
+                  "value": {
+                    "stringValue": "/items/item-005"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/items/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

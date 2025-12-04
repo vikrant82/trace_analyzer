@@ -156,6 +156,53 @@ if node_service == parent_service:
 **Cause**: Aggregation key mismatch
 **Solution**: Verify normalization happens before aggregation, check key composition
 
+## Parallelism Detection Feature
+
+### Overview
+The Trace Hierarchy now detects and displays parallel execution patterns, showing where fan-out occurs and the effective wall-clock time vs cumulative time.
+
+### Key Components
+
+**TimingCalculator (`timing_calculator.py`)**:
+- `merge_time_intervals()`: Merges overlapping time intervals
+- `calculate_wall_clock_ms()`: Calculates effective wall-clock duration from merged intervals
+
+**HierarchyNormalizer (`normalizer.py`)**:
+- Parallelism detection during sibling aggregation
+- Uses `parent_count` parameter to distinguish real vs inherited parallelism:
+  - **Real parallelism**: `count > parent_count` (fan-out occurred at this level)
+  - **Inherited parallelism**: `count == parent_count` (1:1 mapping with parent)
+
+### Display Logic
+
+**Parallelism Indicator** (`⚡` on aggregated child nodes):
+- Shows `parallelism_factor × parallel (wall_clock_ms effective)`
+- Only displayed when `is_real_parallelism = True` AND `parallelism_factor > 1.05`
+
+**Parent Badge** (`⊗` on parent nodes):
+- Marks the node that **introduces** the fan-out
+- Set inline when real parallelism is detected (not via tree traversal)
+- Only the direct parent of parallelized calls gets this badge
+
+### Algorithm
+
+1. During `aggregate_siblings()`, track `parent_count` (the aggregated count of the caller)
+2. When aggregating children: `is_real_parallelism = is_root_level or count > parent_count`
+3. If real parallelism detected and `parallelism_factor > 1.05`:
+   - Set `parallelism_factor` and `wall_clock_ms` on the aggregated child node
+   - Set `has_parallel_children = True` on the direct parent node
+
+### CSS Classes
+- `.metric.parallelism-info`: Styles the `⚡` indicator
+- `.metric.has-parallel-badge`: Styles the `⊗` badge
+
+### Example
+```
+serviceA (count=1) ⊗         ← marked as fan-out source
+  └─ serviceB (count=88) ⚡2.8× ← shows parallelism indicator
+       └─serviceC (count=88) ← no indicator (inherited)
+```
+
 ## Testing Scenarios
 
 To verify hierarchy feature:
