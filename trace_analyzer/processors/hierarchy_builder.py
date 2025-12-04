@@ -59,6 +59,8 @@ class HierarchyBuilder:
                 'is_error': is_error,
                 'error_message': error_message,
                 'http_status_code': http_status_code,
+                'start_time_ns': span.get('startTimeUnixNano', 0),
+                'end_time_ns': span.get('endTimeUnixNano', 0),
             }
             
             if (span.get('kind') == 'SPAN_KIND_SERVER' and 

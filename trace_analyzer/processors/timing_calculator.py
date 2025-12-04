@@ -38,16 +38,28 @@ class TimingCalculator:
         aggregated_children = self.aggregator.aggregate_list_of_nodes(node['children'])
         node['children'] = aggregated_children
         
+        # Check for parallelism in children to mark the parent
+        for child in aggregated_children:
+            if child.get('parallelism_factor', 1.0) > 1.05:
+                node['has_parallel_children'] = True
+                break
+        
         # 3. Finally, calculate the self-time of the current node by subtracting the
-        #    total time of its now-aggregated children
-        child_total_time = sum(child['total_time_ms'] for child in node['children'])
-        node['self_time_ms'] = max(0, node['total_time_ms'] - child_total_time)
+        #    effective time of its now-aggregated children. This handles parallelism correctly.
+        children = node['children']
+        child_effective_time = self.aggregator._calculate_effective_time(children)
+        
+        if child_effective_time > 0:
+            node['self_time_ms'] = max(0, node['total_time_ms'] - child_effective_time)
+        else:
+            # Fallback if timestamps are missing
+            child_total_time = sum(child['total_time_ms'] for child in children)
+            node['self_time_ms'] = max(0, node['total_time_ms'] - child_total_time)
     
-    @staticmethod
-    def recalculate_self_times(node: Dict) -> None:
+    def recalculate_self_times(self, node: Dict) -> None:
         """
         Recursively recalculate self-times after hierarchy modifications.
-        Self-time = total_time - sum(children's total_time)
+        Self-time = total_time - effective_time(children)
         
         Args:
             node: Hierarchy node dictionary (modified in-place)
@@ -57,13 +69,19 @@ class TimingCalculator:
         
         # Recurse to children first (bottom-up)
         for child in node.get('children', []):
-            TimingCalculator.recalculate_self_times(child)
+            self.recalculate_self_times(child)
         
         # Calculate self-time for this node
         children = node.get('children', [])
         if children:
-            child_total = sum(c.get('total_time_ms', 0) for c in children)
-            node['self_time_ms'] = max(0.0, node.get('total_time_ms', 0) - child_total)
+            # Try to use effective time first to handle parallelism
+            child_effective_time = self.aggregator._calculate_effective_time(children)
+            
+            if child_effective_time > 0:
+                node['self_time_ms'] = max(0.0, node.get('total_time_ms', 0) - child_effective_time)
+            else:
+                child_total = sum(c.get('total_time_ms', 0) for c in children)
+                node['self_time_ms'] = max(0.0, node.get('total_time_ms', 0) - child_total)
         else:
             # Leaf node: self-time equals total time
             node['self_time_ms'] = node.get('total_time_ms', 0)

@@ -533,6 +533,112 @@
           ]
         }
       ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "parallel-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "parallel_trace_example",
+              "spanId": "parent_span",
+              "parentSpanId": "",
+              "name": "GET /parallel-test",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1000000000,
+              "endTimeUnixNano":   1100000000,
+              "attributes": [ { "key": "http.method", "value": { "stringValue": "GET" } }, { "key": "http.target", "value": { "stringValue": "/parallel-test" } } ]
+            },
+            {
+              "traceId": "parallel_trace_example",
+              "spanId": "child_1_client",
+              "parentSpanId": "parent_span",
+              "name": "GET /child-op",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1010000000,
+              "endTimeUnixNano":   1060000000,
+              "attributes": [ { "key": "http.method", "value": { "stringValue": "GET" } }, { "key": "http.target", "value": { "stringValue": "/child-op" } } ]
+            },
+            {
+              "traceId": "parallel_trace_example",
+              "spanId": "child_2_client",
+              "parentSpanId": "parent_span",
+              "name": "GET /child-op",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1020000000,
+              "endTimeUnixNano":   1070000000,
+              "attributes": [ { "key": "http.method", "value": { "stringValue": "GET" } }, { "key": "http.target", "value": { "stringValue": "/child-op" } } ]
+            },
+            {
+              "traceId": "parallel_trace_example",
+              "spanId": "child_3_client",
+              "parentSpanId": "parent_span",
+              "name": "GET /child-op",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1030000000,
+              "endTimeUnixNano":   1080000000,
+              "attributes": [ { "key": "http.method", "value": { "stringValue": "GET" } }, { "key": "http.target", "value": { "stringValue": "/child-op" } } ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "backend-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "parallel_trace_example",
+              "spanId": "child_1_server",
+              "parentSpanId": "child_1_client",
+              "name": "GET /child-op",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1010000000,
+              "endTimeUnixNano":   1060000000,
+              "attributes": [ { "key": "http.method", "value": { "stringValue": "GET" } }, { "key": "http.target", "value": { "stringValue": "/child-op" } } ]
+            },
+            {
+              "traceId": "parallel_trace_example",
+              "spanId": "child_2_server",
+              "parentSpanId": "child_2_client",
+              "name": "GET /child-op",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1020000000,
+              "endTimeUnixNano":   1070000000,
+              "attributes": [ { "key": "http.method", "value": { "stringValue": "GET" } }, { "key": "http.target", "value": { "stringValue": "/child-op" } } ]
+            },
+            {
+              "traceId": "parallel_trace_example",
+              "spanId": "child_3_server",
+              "parentSpanId": "child_3_client",
+              "name": "GET /child-op",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1030000000,
+              "endTimeUnixNano":   1080000000,
+              "attributes": [ { "key": "http.method", "value": { "stringValue": "GET" } }, { "key": "http.target", "value": { "stringValue": "/child-op" } } ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

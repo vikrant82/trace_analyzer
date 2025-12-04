@@ -16,7 +16,11 @@ class TestTraceAnalyzerIntegration:
         test_file = Path(__file__).parent.parent.parent / "test-trace.json"
         
         if not test_file.exists():
-            pytest.skip("test-trace.json not found")
+            # Fallback to sample-trace.json
+            test_file = Path(__file__).parent.parent.parent / "sample-trace.json"
+            
+        if not test_file.exists():
+            pytest.skip("Neither test-trace.json nor sample-trace.json found")
         
         # Create analyzer with default config
         analyzer = TraceAnalyzer(
@@ -40,7 +44,11 @@ class TestTraceAnalyzerIntegration:
         test_file = Path(__file__).parent.parent.parent / "test-trace.json"
         
         if not test_file.exists():
-            pytest.skip("test-trace.json not found")
+            # Fallback to sample-trace.json
+            test_file = Path(__file__).parent.parent.parent / "sample-trace.json"
+            
+        if not test_file.exists():
+            pytest.skip("Neither test-trace.json nor sample-trace.json found")
         
         # Test with service mesh enabled
         analyzer1 = TraceAnalyzer(include_service_mesh=True)
@@ -62,7 +70,11 @@ class TestTraceAnalyzerIntegration:
         test_file = Path(__file__).parent.parent.parent / "test-trace.json"
         
         if not test_file.exists():
-            pytest.skip("test-trace.json not found")
+            # Fallback to sample-trace.json
+            test_file = Path(__file__).parent.parent.parent / "sample-trace.json"
+            
+        if not test_file.exists():
+            pytest.skip("Neither test-trace.json nor sample-trace.json found")
         
         analyzer = TraceAnalyzer()
         analyzer.process_trace_file(str(test_file))

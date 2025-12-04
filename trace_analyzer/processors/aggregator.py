@@ -20,6 +20,45 @@ class NodeAggregator:
         self.http_extractor = http_extractor
         self.path_normalizer = path_normalizer
     
+    def _calculate_effective_time(self, nodes: List[Dict]) -> float:
+        """
+        Calculate effective wall-clock time by merging overlapping intervals.
+        
+        Args:
+            nodes: List of nodes with start_time_ns and end_time_ns
+            
+        Returns:
+            Effective time in milliseconds
+        """
+        intervals = []
+        for node in nodes:
+            start = node.get('start_time_ns')
+            end = node.get('end_time_ns')
+            if start is not None and end is not None and end > start:
+                intervals.append((start, end))
+        
+        if not intervals:
+            return 0.0
+            
+        # Sort by start time
+        intervals.sort(key=lambda x: x[0])
+        
+        merged = []
+        if intervals:
+            curr_start, curr_end = intervals[0]
+            for next_start, next_end in intervals[1:]:
+                if next_start < curr_end:
+                    # Overlap, extend current end if needed
+                    curr_end = max(curr_end, next_end)
+                else:
+                    # No overlap, push current and start new
+                    merged.append((curr_start, curr_end))
+                    curr_start, curr_end = next_start, next_end
+            merged.append((curr_start, curr_end))
+            
+        total_ns = sum(end - start for start, end in merged)
+        return total_ns / 1_000_000.0
+
     def aggregate_list_of_nodes(self, nodes: List[Dict]) -> List[Dict]:
         """
         Aggregates a list of nodes based on a composite key.
@@ -89,6 +128,12 @@ class NodeAggregator:
                 total_time = sum(c['total_time_ms'] for c in group)
                 self_time = sum(c['self_time_ms'] for c in group)
                 
+                # Calculate effective time and parallelism
+                effective_time = self._calculate_effective_time(group)
+                parallelism_factor = 1.0
+                if effective_time > 0:
+                    parallelism_factor = total_time / effective_time
+
                 # Grandchildren are simply concatenated. They have already been correctly
                 # aggregated by the main recursive calls in _calculate_hierarchy_timings.
                 all_grandchildren = [grandchild for child in group 
@@ -102,6 +147,17 @@ class NodeAggregator:
                     display_name = key
                     http_method = None
                 
+                # Calculate min start and max end for the aggregated node
+                valid_starts = [c.get('start_time_ns', 0) for c in group if c.get('start_time_ns')]
+                valid_ends = [c.get('end_time_ns', 0) for c in group if c.get('end_time_ns')]
+                start_time_ns = min(valid_starts) if valid_starts else 0
+                end_time_ns = max(valid_ends) if valid_ends else 0
+
+                # Aggregate error information
+                is_error = any(c.get('is_error', False) for c in group)
+                error_message = next((c.get('error_message') for c in group if c.get('error_message')), None)
+                http_status_code = next((c.get('http_status_code') for c in group if c.get('http_status_code')), None)
+
                 agg_node = {
                     'span': {
                         'name': display_name,
@@ -115,7 +171,14 @@ class NodeAggregator:
                     'self_time_ms': self_time,
                     'aggregated': True,
                     'count': sum(c.get('count', 1) for c in group),
-                    'avg_time_ms': total_time / sum(c.get('count', 1) for c in group)
+                    'avg_time_ms': total_time / sum(c.get('count', 1) for c in group),
+                    'parallelism_factor': parallelism_factor,
+                    'effective_time_ms': effective_time,
+                    'start_time_ns': start_time_ns,
+                    'end_time_ns': end_time_ns,
+                    'is_error': is_error,
+                    'error_message': error_message,
+                    'http_status_code': http_status_code
                 }
                 final_list.append(agg_node)
         

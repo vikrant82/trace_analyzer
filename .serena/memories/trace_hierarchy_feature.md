@@ -75,8 +75,8 @@ if parent_span_id not in span_nodes:
 ```
 
 ### Self-Time Calculation
-**Formula**: `self_time = max(0, total_time - sum(children's total_time))`
-**Timing**: Calculated recursively bottom-up after aggregation
+**Formula**: `self_time = max(0, total_time - effective_time(children))`
+**Timing**: Calculated recursively bottom-up after aggregation. Uses effective time (merged intervals) of children to correctly account for parallel execution, preventing negative or zeroed-out self-times when children run concurrently.
 
 ### Sidecar Duplicate Filtering
 **Pattern Detection**:
@@ -132,9 +132,9 @@ if node_service == parent_service:
 ## Common Issues & Solutions
 
 ### Issue 1: Incorrect Self-Times
-**Symptom**: Self-times don't add up correctly
-**Cause**: Not recalculating after tree modifications
-**Solution**: Call `_recalculate_self_times()` after any tree changes
+**Symptom**: Self-times don't add up correctly or are zeroed out
+**Cause**: Not recalculating after tree modifications, or failing to account for parallelism (sum of children > parent total)
+**Solution**: Call `_recalculate_self_times()` after any tree changes; ensure `TimingCalculator` uses effective time of children.
 
 ### Issue 2: Missing Nodes
 **Symptom**: Expected nodes don't appear in hierarchy
@@ -167,3 +167,18 @@ To verify hierarchy feature:
 5. **Multiple roots** - Test root selection
 6. **Concurrent spans** - Test self-time accuracy
 7. **Missing HTTP method** - Test defaults
+
+## Parallelism Detection
+
+### Overview
+The Trace Hierarchy now detects and visualizes parallel execution of spans.
+
+### Algorithm
+1. **Timestamp Capture**: `HierarchyBuilder` captures `start_time_ns` and `end_time_ns` for each node.
+2. **Interval Merging**: `NodeAggregator` calculates the "effective wall-clock time" of aggregated sibling nodes by merging overlapping time intervals.
+3. **Parallelism Factor**: Calculated as `total_time_ms / effective_time_ms`.
+4. **Parent Flagging**: `TimingCalculator` flags parent nodes if any of their aggregated children exhibit parallelism > 1.05x.
+
+### Visual Indicators
+- `⚡`: Displayed on aggregated nodes with parallelism > 1.05x. Tooltip shows factor and effective time.
+- `⊗`: Displayed on parent nodes that contain parallel children.

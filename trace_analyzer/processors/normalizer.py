@@ -23,6 +23,37 @@ class HierarchyNormalizer:
         self.path_normalizer = path_normalizer
         self.timing_calculator = timing_calculator
     
+    def _calculate_effective_time(self, nodes: List[Dict]) -> float:
+        """
+        Calculate effective wall-clock time by merging overlapping intervals.
+        """
+        intervals = []
+        for node in nodes:
+            start = node.get('start_time_ns')
+            end = node.get('end_time_ns')
+            if start is not None and end is not None and end > start:
+                intervals.append((start, end))
+        
+        if not intervals:
+            return 0.0
+            
+        # Sort by start time
+        intervals.sort(key=lambda x: x[0])
+        
+        merged = []
+        if intervals:
+            curr_start, curr_end = intervals[0]
+            for next_start, next_end in intervals[1:]:
+                if next_start < curr_end:
+                    curr_end = max(curr_end, next_end)
+                else:
+                    merged.append((curr_start, curr_end))
+                    curr_start, curr_end = next_start, next_end
+            merged.append((curr_start, curr_end))
+            
+        total_ns = sum(end - start for start, end in merged)
+        return total_ns / 1_000_000.0
+
     def normalize_and_aggregate_hierarchy(self, root_node: Dict) -> Optional[Dict]:
         """
         Recursively normalize span names and aggregate sibling nodes that have
@@ -172,6 +203,18 @@ class HierarchyNormalizer:
                     self_time = sum(c.get('self_time_ms', 0) for c in group_children)
                     count = len(group_children)
                     
+                    # Calculate effective time and parallelism
+                    effective_time = self._calculate_effective_time(group_children)
+                    parallelism_factor = 1.0
+                    if effective_time > 0:
+                        parallelism_factor = total_time / effective_time
+                    
+                    # Calculate min start and max end for the aggregated node
+                    valid_starts = [c.get('start_time_ns') for c in group_children if c.get('start_time_ns')]
+                    valid_ends = [c.get('end_time_ns') for c in group_children if c.get('end_time_ns')]
+                    start_time_ns = min(valid_starts) if valid_starts else 0
+                    end_time_ns = max(valid_ends) if valid_ends else 0
+                    
                     # Collect all grandchildren
                     all_grandchildren = []
                     for c in group_children:
@@ -222,7 +265,11 @@ class HierarchyNormalizer:
                         'is_error': any_errors,
                         'error_message': agg_error_message,
                         'http_status_code': agg_http_status,
-                        'error_count': error_count
+                        'error_count': error_count,
+                        'parallelism_factor': parallelism_factor,
+                        'effective_time_ms': effective_time,
+                        'start_time_ns': start_time_ns,
+                        'end_time_ns': end_time_ns
                     }
                     aggregated.append(agg_node)
             
