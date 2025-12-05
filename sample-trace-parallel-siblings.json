@@ -1,0 +1,276 @@
+{
+  "comment": "Trace demonstrating parallel sibling calls to DIFFERENT services (non-aggregated)",
+  "description": "Parent calls auth, user, and order services in parallel - tests sibling-level parallelism",
+  "expected_output": {
+    "api-gateway GET /api/composite": {
+      "total_time": "150ms",
+      "self_time": "~60ms (effective child time = 90ms from 10-100ms overlap)",
+      "indicator": "⊗ (has parallel children)",
+      "children": [
+        "auth-service POST /validate (50ms)",
+        "user-service GET /profile (60ms)",
+        "order-service GET /history (70ms)"
+      ]
+    },
+    "note": "No ⚡ indicators expected - parallelism only shows for aggregated nodes in current spec"
+  },
+  "batches": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "api-gateway"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "parallel-siblings-trace-001",
+              "spanId": "parent-span-001",
+              "parentSpanId": "",
+              "name": "GET /api/composite",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459200000000000,
+              "endTimeUnixNano": 1609459200150000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/api/composite"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "parallel-siblings-trace-001",
+              "spanId": "auth-client-span-001",
+              "parentSpanId": "parent-span-001",
+              "name": "HTTP POST",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459200010000000,
+              "endTimeUnixNano": 1609459200060000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://auth-service:8080/validate"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "parallel-siblings-trace-001",
+              "spanId": "user-client-span-001",
+              "parentSpanId": "parent-span-001",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459200020000000,
+              "endTimeUnixNano": 1609459200080000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://user-service:8080/profile"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "parallel-siblings-trace-001",
+              "spanId": "order-client-span-001",
+              "parentSpanId": "parent-span-001",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459200030000000,
+              "endTimeUnixNano": 1609459200100000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://order-service:8080/history"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "auth-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "parallel-siblings-trace-001",
+              "spanId": "auth-server-span-001",
+              "parentSpanId": "auth-client-span-001",
+              "name": "POST /validate",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459200010000000,
+              "endTimeUnixNano": 1609459200060000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/validate"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "user-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "parallel-siblings-trace-001",
+              "spanId": "user-server-span-001",
+              "parentSpanId": "user-client-span-001",
+              "name": "GET /profile",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459200020000000,
+              "endTimeUnixNano": 1609459200080000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/profile"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "order-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "parallel-siblings-trace-001",
+              "spanId": "order-server-span-001",
+              "parentSpanId": "order-client-span-001",
+              "name": "GET /history",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459200030000000,
+              "endTimeUnixNano": 1609459200100000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/history"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
