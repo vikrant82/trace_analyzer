@@ -1,0 +1,242 @@
+{
+  "comment": "Minimal trace demonstrating parallel execution for PARALLELISM_FEATURE_SPEC.md Task 8",
+  "description": "Parent span calls 3 services in parallel, showing effective time vs cumulative time",
+  "expected_output": {
+    "api-gateway GET /api/aggregate": {
+      "total_time": "150ms",
+      "self_time": "50ms (0-10ms + 110-150ms)",
+      "indicator": "⊗ (has parallel children)"
+    },
+    "data-service GET /items/{id} (aggregated)": {
+      "count": 3,
+      "total_time": "240ms (100 + 80 + 60)",
+      "effective_time": "100ms (merged interval 10-110ms)",
+      "parallelism_factor": "2.4×",
+      "indicator": "⚡ (parallel execution)"
+    }
+  },
+  "note": "All child CLIENT calls go to data-service so they aggregate into one node",
+  "batches": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "api-gateway"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "parallel-demo-trace-001",
+              "spanId": "parent-span-001",
+              "parentSpanId": "",
+              "name": "GET /api/aggregate",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459200000000000,
+              "endTimeUnixNano": 1609459200150000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/api/aggregate"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "parallel-demo-trace-001",
+              "spanId": "child-span-001",
+              "parentSpanId": "parent-span-001",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459200010000000,
+              "endTimeUnixNano": 1609459200110000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://data-service:8080/items/item-001"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "parallel-demo-trace-001",
+              "spanId": "child-span-002",
+              "parentSpanId": "parent-span-001",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459200030000000,
+              "endTimeUnixNano": 1609459200110000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://data-service:8080/items/item-002"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "parallel-demo-trace-001",
+              "spanId": "child-span-003",
+              "parentSpanId": "parent-span-001",
+              "name": "HTTP GET",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": 1609459200050000000,
+              "endTimeUnixNano": 1609459200110000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.url",
+                  "value": {
+                    "stringValue": "http://data-service:8080/items/item-003"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "data-service"
+            }
+          }
+        ]
+      },
+      "instrumentationLibrarySpans": [
+        {
+          "spans": [
+            {
+              "traceId": "parallel-demo-trace-001",
+              "spanId": "data-service-span-001",
+              "parentSpanId": "child-span-001",
+              "name": "GET /items/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459200020000000,
+              "endTimeUnixNano": 1609459200100000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/items/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "parallel-demo-trace-001",
+              "spanId": "data-service-span-002",
+              "parentSpanId": "child-span-002",
+              "name": "GET /items/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459200040000000,
+              "endTimeUnixNano": 1609459200100000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/items/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "parallel-demo-trace-001",
+              "spanId": "data-service-span-003",
+              "parentSpanId": "child-span-003",
+              "name": "GET /items/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": 1609459200060000000,
+              "endTimeUnixNano": 1609459200100000000,
+              "attributes": [
+                {
+                  "key": "http.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/items/{id}"
+                  }
+                },
+                {
+                  "key": "http.status_code",
+                  "value": {
+                    "intValue": 200
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

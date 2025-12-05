@@ -87,4 +87,35 @@ class TestHttpExtractor:
         assert HttpExtractor.extract_http_path(attributes) == ""
         assert HttpExtractor.extract_http_method(attributes) == ""
         assert HttpExtractor.extract_service_name(attributes) == "unknown-service"
-
+    
+    def test_http_route_preferred_over_target(self):
+        """Test that http.route (template path) takes precedence over http.target."""
+        attributes = [
+            {"key": "http.route", "value": {"stringValue": "/items/{id}"}},
+            {"key": "http.target", "value": {"stringValue": "/items/item-001"}},
+        ]
+        # Should use the normalized route, not the actual target
+        assert HttpExtractor.extract_http_path(attributes) == "/items/{id}"
+    
+    def test_http_route_preferred_over_url(self):
+        """Test that http.route takes precedence over http.url."""
+        attributes = [
+            {"key": "http.url", "value": {"stringValue": "http://service:8080/users/12345"}},
+            {"key": "http.route", "value": {"stringValue": "/users/{id}"}},
+        ]
+        assert HttpExtractor.extract_http_path(attributes) == "/users/{id}"
+    
+    def test_fallback_to_target_when_no_route(self):
+        """Test fallback to http.target when http.route is absent."""
+        attributes = [
+            {"key": "http.target", "value": {"stringValue": "/api/data"}},
+        ]
+        assert HttpExtractor.extract_http_path(attributes) == "/api/data"
+    
+    def test_empty_http_route_falls_back(self):
+        """Test that empty http.route falls back to http.target."""
+        attributes = [
+            {"key": "http.route", "value": {"stringValue": ""}},
+            {"key": "http.target", "value": {"stringValue": "/actual/path"}},
+        ]
+        assert HttpExtractor.extract_http_path(attributes) == "/actual/path"

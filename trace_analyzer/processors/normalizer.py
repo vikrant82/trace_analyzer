@@ -123,8 +123,15 @@ class HierarchyNormalizer:
             
             return result
         
-        def aggregate_siblings(children, parent_node=None):
-            """Aggregate sibling nodes with the same normalized endpoint."""
+        def aggregate_siblings(children, parent_node=None, parent_count=1, is_root_level=False):
+            """Aggregate sibling nodes with the same normalized endpoint.
+            
+            Args:
+                children: List of child nodes to aggregate
+                parent_node: Parent node (for sidecar filtering)
+                parent_count: Count of parent's aggregation (for parallelism detection)
+                is_root_level: If True, calculate parallelism for aggregated groups
+            """
             if not children:
                 return []
             
@@ -156,7 +163,8 @@ class HierarchyNormalizer:
                 if len(group_children) == 1:
                     # Single node - just recursively process children
                     node = group_children[0]
-                    node['children'] = aggregate_siblings(node.get('children', []), node)
+                    # Pass this node for filtering, count=1 for parallelism
+                    node['children'] = aggregate_siblings(node.get('children', []), node, parent_count=1, is_root_level=False)
                     node['aggregated'] = False
                     node['count'] = 1
                     # Ensure error information is preserved for single nodes
@@ -177,8 +185,41 @@ class HierarchyNormalizer:
                     for c in group_children:
                         all_grandchildren.extend(c.get('children', []))
                     
-                    # Recursively aggregate grandchildren (pass first as parent node)
-                    aggregated_grandchildren = aggregate_siblings(all_grandchildren, first)
+                    # Recursively aggregate grandchildren
+                    # Use first for filtering, count for parallelism detection
+                    aggregated_grandchildren = aggregate_siblings(all_grandchildren, first, parent_count=count, is_root_level=False)
+                    
+                    # Calculate parallelism - but only show if it's "real" parallelism
+                    # Real parallelism: This node was fan-out target (count > parent count or it's root level)
+                    # Inherited parallelism: 1:1 mapping with parent (count == parent count)
+                    parallelism_factor = 1.0
+                    wall_clock_ms = None
+                    is_real_parallelism = is_root_level or count > parent_count
+                    
+                    if is_real_parallelism:
+                        child_intervals = [
+                            (c.get('start_time_ns', 0), c.get('end_time_ns', 0))
+                            for c in group_children
+                            if c.get('start_time_ns') is not None and c.get('end_time_ns') is not None
+                               and c.get('start_time_ns') < c.get('end_time_ns')
+                        ]
+                        if len(child_intervals) > 1:
+                            wall_clock_ms = self.timing_calculator.calculate_wall_clock_ms(child_intervals)
+                            if wall_clock_ms > 0:
+                                parallelism_factor = round(total_time / wall_clock_ms, 2)
+                                if parallelism_factor <= 1.05:
+                                    parallelism_factor = 1.0
+                                    wall_clock_ms = None
+                                else:
+                                    # Mark the DIRECT parent as having parallel children
+                                    # This only marks the node that introduces the fan-out
+                                    parent_node['has_parallel_children'] = True
+                    
+                    # Calculate time bounds for aggregated node (min start, max end)
+                    start_times = [c.get('start_time_ns', 0) for c in group_children if c.get('start_time_ns')]
+                    end_times = [c.get('end_time_ns', 0) for c in group_children if c.get('end_time_ns')]
+                    agg_start = min(start_times) if start_times else 0
+                    agg_end = max(end_times) if end_times else 0
                     
                     # Aggregate error information: if ANY child has an error, mark the aggregated node as error
                     any_errors = any(c.get('is_error', False) for c in group_children)
@@ -222,7 +263,11 @@ class HierarchyNormalizer:
                         'is_error': any_errors,
                         'error_message': agg_error_message,
                         'http_status_code': agg_http_status,
-                        'error_count': error_count
+                        'error_count': error_count,
+                        'start_time_ns': agg_start,
+                        'end_time_ns': agg_end,
+                        'parallelism_factor': parallelism_factor,
+                        'wall_clock_ms': wall_clock_ms,
                     }
                     aggregated.append(agg_node)
             
@@ -231,9 +276,13 @@ class HierarchyNormalizer:
         # Normalize and process the root
         root_copy = root_node.copy()
         normalize_node(root_copy)
-        root_copy['children'] = aggregate_siblings(root_copy.get('children', []), root_copy)
+        # Process root's children with is_root_level=True and parent_count=1
+        root_copy['children'] = aggregate_siblings(root_copy.get('children', []), root_copy, parent_count=1, is_root_level=True)
         root_copy['aggregated'] = False
         root_copy['count'] = 1
+        
+        # Note: has_parallel_children is now set inline within aggregate_siblings
+        # when we detect real parallelism (count > parent_count and parallelism_factor > 1)
         
         # Recalculate self-times after filtering and lifting
         self.timing_calculator.recalculate_self_times(root_copy)

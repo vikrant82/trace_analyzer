@@ -2,7 +2,7 @@
 Node aggregator for hierarchy siblings.
 """
 
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from collections import defaultdict
 
 
@@ -89,6 +89,12 @@ class NodeAggregator:
                 total_time = sum(c['total_time_ms'] for c in group)
                 self_time = sum(c['self_time_ms'] for c in group)
                 
+                # Calculate time bounds for aggregated node (min start, max end)
+                start_times = [c.get('start_time_ns', 0) for c in group if c.get('start_time_ns')]
+                end_times = [c.get('end_time_ns', 0) for c in group if c.get('end_time_ns')]
+                agg_start = min(start_times) if start_times else 0
+                agg_end = max(end_times) if end_times else 0
+                
                 # Grandchildren are simply concatenated. They have already been correctly
                 # aggregated by the main recursive calls in _calculate_hierarchy_timings.
                 all_grandchildren = [grandchild for child in group 
@@ -113,9 +119,11 @@ class NodeAggregator:
                     'children': all_grandchildren,
                     'total_time_ms': total_time,
                     'self_time_ms': self_time,
+                    'start_time_ns': agg_start,
+                    'end_time_ns': agg_end,
                     'aggregated': True,
                     'count': sum(c.get('count', 1) for c in group),
-                    'avg_time_ms': total_time / sum(c.get('count', 1) for c in group)
+                    'avg_time_ms': total_time / sum(c.get('count', 1) for c in group),
                 }
                 final_list.append(agg_node)
         
