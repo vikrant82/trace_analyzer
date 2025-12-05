@@ -40,36 +40,36 @@ class TestErrorIntegration:
             assert 'error_messages' in endpoint_data
             assert len(endpoint_data['error_messages']) > 0
     
-    @pytest.mark.skip(reason="Test needs update for batches format - error detection already tested in test_sample_trace_error_detection")
+    # @pytest.mark.skip(reason="Test needs update for batches format - error detection already tested in test_sample_trace_error_detection")
     def test_error_trace_with_empty_messages(self):
         """Test handling of error traces with empty status messages."""
         # Create a minimal trace with error and empty message
         trace_data = {
-            "resourceSpans": [
+            "batches": [
                 {
                     "resource": {
                         "attributes": [
                             {"key": "service.name", "value": {"stringValue": "test-service"}}
                         ]
                     },
-                    "scopeSpans": [
+                    "instrumentationLibrarySpans": [
                         {
                             "spans": [
                                 {
-                                    "traceId": "abc123",
-                                    "spanId": "span1",
+                                    "traceId": "abc123abc123abc123abc123abc123ab",
+                                    "spanId": "span1span1span1",
                                     "parentSpanId": "",
                                     "name": "GET /test",
-                                    "kind": 2,
-                                    "startTimeUnixNano": "1000000000",
-                                    "endTimeUnixNano": "2000000000",
+                                    "kind": "SPAN_KIND_SERVER",
+                                    "startTimeUnixNano": 1000000000,
+                                    "endTimeUnixNano": 2000000000,
                                     "status": {
                                         "code": 2,
                                         "message": ""
                                     },
                                     "attributes": [
                                         {"key": "http.method", "value": {"stringValue": "GET"}},
-                                        {"key": "http.route", "value": {"stringValue": "/test"}},
+                                        {"key": "http.target", "value": {"stringValue": "/test"}},
                                         {"key": "http.status_code", "value": {"intValue": 404}}
                                     ]
                                 }
@@ -120,7 +120,7 @@ class TestErrorIntegration:
         total_errors = sum(e['error_count'] for e in analyzer.endpoint_params.values())
         assert total_errors > 0, "Should have errors"
     
-    @pytest.mark.skip(reason="Hierarchy access needs update - error visualization working as shown in UI tests")
+    # @pytest.mark.skip(reason="Hierarchy access needs update - error visualization working as shown in UI tests")
     def test_error_hierarchy_visualization_data(self):
         """Test that hierarchy contains error visualization data."""
         sample_file = Path(__file__).parent.parent.parent / "sample-trace.json"
@@ -158,49 +158,48 @@ class TestErrorIntegration:
             return False
         
         # Check all trace hierarchies
-        for trace_id, trace_data in analyzer.traces.items():
-            if 'hierarchy' in trace_data:
-                check_node_for_errors(trace_data['hierarchy'])
+        for trace_id, hierarchy in analyzer.trace_hierarchies.items():
+            check_node_for_errors(hierarchy)
         
         # Should have found at least one error node in the enhanced sample trace
         assert found_error_node, "Should find error nodes in hierarchy"
     
-    @pytest.mark.skip(reason="Test needs update for batches format - aggregation tested via UI")
+    # @pytest.mark.skip(reason="Test needs update for batches format - aggregation tested via UI")
     def test_aggregated_error_nodes(self):
         """Test that aggregated nodes preserve error information."""
         # Create trace with multiple identical error calls
         trace_data = {
-            "resourceSpans": [
+            "batches": [
                 {
                     "resource": {
                         "attributes": [
                             {"key": "service.name", "value": {"stringValue": "api-service"}}
                         ]
                     },
-                    "scopeSpans": [
+                    "instrumentationLibrarySpans": [
                         {
                             "spans": [
                                 {
-                                    "traceId": "trace1",
-                                    "spanId": "root",
+                                    "traceId": "trace1trace1trace1trace1trace1tr",
+                                    "spanId": "rootrootrootroot",
                                     "parentSpanId": "",
                                     "name": "GET /api/users/{id}",
-                                    "kind": 2,
-                                    "startTimeUnixNano": "1000000000",
-                                    "endTimeUnixNano": "1500000000",
+                                    "kind": "SPAN_KIND_SERVER",
+                                    "startTimeUnixNano": 1000000000,
+                                    "endTimeUnixNano": 1500000000,
                                     "attributes": [
                                         {"key": "http.method", "value": {"stringValue": "GET"}},
-                                        {"key": "http.route", "value": {"stringValue": "/api/users/{id}"}}
+                                        {"key": "http.target", "value": {"stringValue": "/api/users/{id}"}}
                                     ]
                                 },
                                 {
-                                    "traceId": "trace1",
-                                    "spanId": "call1",
-                                    "parentSpanId": "root",
+                                    "traceId": "trace1trace1trace1trace1trace1tr",
+                                    "spanId": "call1call1call1c",
+                                    "parentSpanId": "rootrootrootroot",
                                     "name": "HTTP GET",
-                                    "kind": 3,
-                                    "startTimeUnixNano": "1100000000",
-                                    "endTimeUnixNano": "1200000000",
+                                    "kind": "SPAN_KIND_CLIENT",
+                                    "startTimeUnixNano": 1100000000,
+                                    "endTimeUnixNano": 1200000000,
                                     "status": {"code": 2, "message": "Timeout"},
                                     "attributes": [
                                         {"key": "http.method", "value": {"stringValue": "GET"}},
@@ -209,13 +208,13 @@ class TestErrorIntegration:
                                     ]
                                 },
                                 {
-                                    "traceId": "trace1",
-                                    "spanId": "call2",
-                                    "parentSpanId": "root",
+                                    "traceId": "trace1trace1trace1trace1trace1tr",
+                                    "spanId": "call2call2call2c",
+                                    "parentSpanId": "rootrootrootroot",
                                     "name": "HTTP GET",
-                                    "kind": 3,
-                                    "startTimeUnixNano": "1250000000",
-                                    "endTimeUnixNano": "1350000000",
+                                    "kind": "SPAN_KIND_CLIENT",
+                                    "startTimeUnixNano": 1250000000,
+                                    "endTimeUnixNano": 1350000000,
                                     "status": {"code": 2, "message": "Timeout"},
                                     "attributes": [
                                         {"key": "http.method", "value": {"stringValue": "GET"}},
@@ -240,8 +239,7 @@ class TestErrorIntegration:
             analyzer.process_trace_file(temp_file)
             
             # Find aggregated node in hierarchy
-            trace_data = list(analyzer.traces.values())[0]
-            hierarchy = trace_data.get('hierarchy')
+            hierarchy = list(analyzer.trace_hierarchies.values())[0]
             assert hierarchy is not None, "Should have hierarchy"
             
             def find_aggregated_error_node(node):
@@ -279,7 +277,7 @@ class TestErrorIntegration:
         analyzer = TraceAnalyzer()
         analyzer.process_trace_file(str(sample_file))
         
-        # Count total errors from all sources
+        # Count tota        cd /Users/chauv/launchpad/Trace_Analyser && python analyze_trace.py sample-trace-parallel.jsonl errors from all sources
         total_errors = (sum(e['error_count'] for e in analyzer.endpoint_params.values()) +
                        sum(e['error_count'] for e in analyzer.service_calls.values()) +
                        sum(e['error_count'] for e in analyzer.kafka_messages.values()))

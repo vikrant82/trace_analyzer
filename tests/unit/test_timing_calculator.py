@@ -169,3 +169,136 @@ class TestParallelismFactor:
         parallelism = cumulative / wall_clock
         assert parallelism >= 3.5
         assert parallelism <= 5.0
+
+
+class TestSelfTimeWithParallelism:
+    """Tests for self-time calculation with parallel child execution."""
+    
+    def test_self_time_with_parallel_children(self):
+        """Test that self-time correctly handles parallel child execution.
+        
+        Scenario:
+          Parent: 0-150ms (150ms total)
+          Child 1: 10-110ms (100ms)
+          Child 2: 30-110ms (80ms) - overlaps with child 1
+          Child 3: 50-110ms (60ms) - overlaps with both
+        
+        Expected:
+          Cumulative child time: 100 + 80 + 60 = 240ms
+          Effective child time: 100ms (merged interval 10-110ms)
+          Self-time: 150 - 100 = 50ms (NOT 150 - 240 = 0ms!)
+        """
+        from trace_analyzer.processors.aggregator import NodeAggregator
+        from trace_analyzer.extractors.http_extractor import HttpExtractor
+        from trace_analyzer.extractors.path_normalizer import PathNormalizer
+        
+        # Create aggregator with required dependencies
+        http_extractor = HttpExtractor()
+        path_normalizer = PathNormalizer()
+        aggregator = NodeAggregator(http_extractor, path_normalizer)
+        calculator = TimingCalculator(aggregator)
+        
+        base = 1_000_000_000  # 1 second in nanoseconds as base
+        
+        node = {
+            'span': {'name': 'test-parent'},
+            'service_name': 'test-service',
+            'total_time_ms': 150.0,
+            'start_time_ns': base,
+            'end_time_ns': base + 150_000_000,
+            'children': [
+                {
+                    'span': {'name': 'child-1'},
+                    'service_name': 'test-service',
+                    'total_time_ms': 100.0,
+                    'self_time_ms': 100.0,  # Leaf nodes: self = total
+                    'start_time_ns': base + 10_000_000,  # 10ms
+                    'end_time_ns': base + 110_000_000,   # 110ms
+                    'children': []
+                },
+                {
+                    'span': {'name': 'child-2'},
+                    'service_name': 'test-service',
+                    'total_time_ms': 80.0,
+                    'self_time_ms': 80.0,  # Leaf nodes: self = total
+                    'start_time_ns': base + 30_000_000,  # 30ms (overlap!)
+                    'end_time_ns': base + 110_000_000,   # 110ms
+                    'children': []
+                },
+                {
+                    'span': {'name': 'child-3'},
+                    'service_name': 'test-service',
+                    'total_time_ms': 60.0,
+                    'self_time_ms': 60.0,  # Leaf nodes: self = total
+                    'start_time_ns': base + 50_000_000,  # 50ms (overlap!)
+                    'end_time_ns': base + 110_000_000,   # 110ms
+                    'children': []
+                }
+            ]
+        }
+        
+        # Process the node
+        calculator.calculate_hierarchy_timings(node)
+        
+        # Self-time should be 50ms, NOT 0ms
+        assert node['self_time_ms'] == pytest.approx(50.0, abs=0.1)
+        
+        # Should have detected parallelism
+        assert 'children_wall_clock_ms' in node
+        assert node['children_wall_clock_ms'] == pytest.approx(100.0, abs=0.1)
+        assert node['children_cumulative_ms'] == pytest.approx(240.0, abs=0.1)
+        
+        # Parallelism factor should be ~2.4
+        assert 'parallelism_factor' in node
+        assert node['parallelism_factor'] == pytest.approx(2.4, abs=0.1)
+    
+    def test_self_time_without_parallel_execution(self):
+        """Test that self-time calculation works correctly for sequential children."""
+        from trace_analyzer.processors.aggregator import NodeAggregator
+        from trace_analyzer.extractors.http_extractor import HttpExtractor
+        from trace_analyzer.extractors.path_normalizer import PathNormalizer
+        
+        # Create aggregator with required dependencies
+        http_extractor = HttpExtractor()
+        path_normalizer = PathNormalizer()
+        aggregator = NodeAggregator(http_extractor, path_normalizer)
+        calculator = TimingCalculator(aggregator)
+        
+        base = 1_000_000_000
+        
+        node = {
+            'span': {'name': 'sequential-parent'},
+            'service_name': 'test-service',
+            'total_time_ms': 200.0,
+            'start_time_ns': base,
+            'end_time_ns': base + 200_000_000,
+            'children': [
+                {
+                    'span': {'name': 'seq-child-1'},
+                    'service_name': 'test-service',
+                    'total_time_ms': 50.0,
+                    'self_time_ms': 50.0,  # Leaf nodes: self = total
+                    'start_time_ns': base + 10_000_000,   # 10-60ms
+                    'end_time_ns': base + 60_000_000,
+                    'children': []
+                },
+                {
+                    'span': {'name': 'seq-child-2'},
+                    'service_name': 'test-service',
+                    'total_time_ms': 70.0,
+                    'self_time_ms': 70.0,  # Leaf nodes: self = total
+                    'start_time_ns': base + 70_000_000,   # 70-140ms (no overlap)
+                    'end_time_ns': base + 140_000_000,
+                    'children': []
+                }
+            ]
+        }
+        
+        calculator.calculate_hierarchy_timings(node)
+        
+        # Self-time: 200 - (50 + 70) = 80ms
+        assert node['self_time_ms'] == pytest.approx(80.0, abs=0.1)
+        
+        # Wall clock should equal cumulative (no parallelism)
+        assert node['children_wall_clock_ms'] == pytest.approx(120.0, abs=0.1)
+        assert node['parallelism_factor'] == 1.0  # No significant parallelism

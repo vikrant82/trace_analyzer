@@ -87,30 +87,38 @@ class TimingCalculator:
         aggregated_children = self.aggregator.aggregate_list_of_nodes(node['children'])
         node['children'] = aggregated_children
         
-        # 3. Calculate self-time of the current node by subtracting the
-        #    total time of its now-aggregated children (cumulative)
-        child_total_time = sum(child['total_time_ms'] for child in node['children'])
-        node['self_time_ms'] = max(0, node['total_time_ms'] - child_total_time)
-        
-        # 4. Calculate wall-clock time (effective duration) from child intervals
+        # 3. Extract child time intervals for wall-clock and self-time calculations
         child_intervals = [
-            (child.get('start_time_ns', 0), child.get('end_time_ns', 0))
+            (child.get('start_time_ns'), child.get('end_time_ns'))
             for child in node['children']
-            if child.get('start_time_ns') and child.get('end_time_ns')
+            if child.get('start_time_ns') is not None 
+            and child.get('end_time_ns') is not None
+            and child.get('start_time_ns') < child.get('end_time_ns')
         ]
         
+        # Calculate cumulative child time (sum of individual durations)
+        child_total_time = sum(child['total_time_ms'] for child in node['children'])
+        
+        # 4. Calculate self-time using effective wall-clock time (handles parallelism)
         if child_intervals:
-            children_wall_clock_ms = self.calculate_wall_clock_ms(child_intervals)
-            node['children_wall_clock_ms'] = children_wall_clock_ms
+            # Use effective wall-clock time (merged intervals) to handle parallel children
+            child_effective_time = self.calculate_wall_clock_ms(child_intervals)
+            node['self_time_ms'] = max(0, node['total_time_ms'] - child_effective_time)
+            
+            # Store wall-clock metrics for parallelism detection
+            node['children_wall_clock_ms'] = child_effective_time
             node['children_cumulative_ms'] = child_total_time
             
             # Calculate parallelism factor: cumulative / wall-clock
             # Factor > 1 indicates parallel execution
-            if children_wall_clock_ms > 0:
-                parallelism = child_total_time / children_wall_clock_ms
+            if child_effective_time > 0:
+                parallelism = child_total_time / child_effective_time
                 node['parallelism_factor'] = round(parallelism, 2) if parallelism > 1.05 else 1.0
             else:
                 node['parallelism_factor'] = 1.0
+        else:
+            # Fallback for nodes without timestamps: use cumulative sum
+            node['self_time_ms'] = max(0, node['total_time_ms'] - child_total_time)
         
         # Note: has_parallel_children is now set by normalizer.mark_parallel_parents()
         # after the second aggregation pass, which properly detects real parallelism
@@ -119,7 +127,7 @@ class TimingCalculator:
     def recalculate_self_times(node: Dict) -> None:
         """
         Recursively recalculate self-times after hierarchy modifications.
-        Self-time = total_time - sum(children's total_time)
+        Uses effective wall-clock time to handle parallel children correctly.
         
         Args:
             node: Hierarchy node dictionary (modified in-place)
@@ -134,8 +142,23 @@ class TimingCalculator:
         # Calculate self-time for this node
         children = node.get('children', [])
         if children:
-            child_total = sum(c.get('total_time_ms', 0) for c in children)
-            node['self_time_ms'] = max(0.0, node.get('total_time_ms', 0) - child_total)
+            # Extract child intervals for effective time calculation
+            child_intervals = [
+                (c.get('start_time_ns'), c.get('end_time_ns'))
+                for c in children
+                if c.get('start_time_ns') is not None 
+                and c.get('end_time_ns') is not None
+                and c.get('start_time_ns') < c.get('end_time_ns')
+            ]
+            
+            if child_intervals:
+                # Use effective wall-clock time (handles parallelism)
+                child_effective_time = TimingCalculator.calculate_wall_clock_ms(child_intervals)
+                node['self_time_ms'] = max(0.0, node.get('total_time_ms', 0) - child_effective_time)
+            else:
+                # Fallback: use cumulative sum if timestamps missing
+                child_total = sum(c.get('total_time_ms', 0) for c in children)
+                node['self_time_ms'] = max(0.0, node.get('total_time_ms', 0) - child_total)
         else:
             # Leaf node: self-time equals total time
             node['self_time_ms'] = node.get('total_time_ms', 0)
