@@ -273,6 +273,64 @@ header h1 {
     font-size: 0.9rem;
 }
 
+/* Sample Traces Section */
+.sample-traces-section {
+    background: var(--card-bg);
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: var(--shadow);
+    margin-top: 2rem;
+}
+
+.sample-traces-section h3 {
+    margin-bottom: 0.5rem;
+}
+
+.sample-traces-section > p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+.sample-traces-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.sample-trace-card {
+    display: block;
+    text-align: center;
+    padding: 1.5rem;
+    background: var(--bg-color);
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: inherit;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.sample-trace-card:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.sample-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.sample-trace-card h4 {
+    margin-bottom: 0.25rem;
+    color: var(--primary-color);
+}
+
+.sample-trace-card p {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
 /* Results Page */
 .summary-section {
     margin-bottom: 3rem;

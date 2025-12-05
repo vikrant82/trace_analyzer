@@ -97,6 +97,20 @@
                 <p>You can also use the REST API to programmatically analyze trace files:</p>
                 <pre><code>curl -X POST -F "file=@trace.json" http://localhost:5000/api/analyze</code></pre>
             </div>
+
+            <div class="sample-traces-section">
+                <h3>🧪 Try Sample Traces</h3>
+                <p>Don't have a trace file? Try one of our sample traces to explore the features:</p>
+                <div class="sample-traces-grid">
+                    {% for key, sample in sample_traces.items() %}
+                    <a href="{{ url_for('analyze_sample', sample_name=key) }}" class="sample-trace-card">
+                        <div class="sample-icon">📄</div>
+                        <h4>{{ sample.name }}</h4>
+                        <p>{{ sample.description }}</p>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
         </main>
 
         <footer>

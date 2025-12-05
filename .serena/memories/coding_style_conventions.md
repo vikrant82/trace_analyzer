@@ -72,3 +72,9 @@ def process_trace_file(self, file_path: str):
 - Keep JavaScript in `<script>` tags at bottom of HTML
 - Use data attributes for storing metadata (e.g., `data-state`, `data-total-time`)
 - Use CSS classes for styling, not inline styles
+
+### Docker Image Maintenance
+- **Keep Dockerfile in sync**: When adding new files referenced by the app (e.g., sample traces, static assets), ensure they are COPYed in `Dockerfile`
+- **Test Docker builds**: After modifying Dockerfile, verify with `docker build -t trace-analyzer .`
+- **File patterns**: Use wildcards for related files (e.g., `COPY sample-trace*.json ./`)
+- **Deployment target**: This project is typically deployed as a Docker container - always consider Docker compatibility

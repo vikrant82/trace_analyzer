@@ -10,6 +10,7 @@ COPY app.py .
 COPY trace_analyzer/ ./trace_analyzer/
 COPY templates/ ./templates/
 COPY static/ ./static/
+COPY sample-trace*.json ./
 
 EXPOSE 5000
 

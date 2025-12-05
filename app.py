@@ -23,10 +23,77 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+SAMPLE_TRACES = {
+    'basic': {
+        'file': 'sample-trace.json',
+        'name': 'Basic Trace',
+        'description': 'Simple service-to-service call chain'
+    },
+    'parallel': {
+        'file': 'sample-trace-parallel.json',
+        'name': 'Parallel Calls',
+        'description': 'Trace with parallel downstream calls'
+    },
+    'parallel-siblings': {
+        'file': 'sample-trace-parallel-siblings.json',
+        'name': 'Parallel Siblings',
+        'description': 'Trace with parallel sibling spans'
+    }
+}
+
+
 @app.route('/')
 def index():
     """Main page with file upload form."""
-    return render_template('index.html')
+    return render_template('index.html', sample_traces=SAMPLE_TRACES)
+
+
+@app.route('/analyze/sample/<sample_name>', methods=['GET', 'POST'])
+def analyze_sample(sample_name: str):
+    """
+    Analyze a pre-loaded sample trace file.
+    
+    Args:
+        sample_name: Key identifying the sample trace (basic, parallel, parallel-siblings)
+    
+    Returns:
+        HTML results page or error
+    """
+    if sample_name not in SAMPLE_TRACES:
+        return render_template('index.html', 
+                             sample_traces=SAMPLE_TRACES,
+                             error=f'Unknown sample trace: {sample_name}')
+    
+    sample = SAMPLE_TRACES[sample_name]
+    filepath = os.path.join(os.path.dirname(__file__), sample['file'])
+    
+    if not os.path.exists(filepath):
+        return render_template('index.html',
+                             sample_traces=SAMPLE_TRACES,
+                             error=f'Sample file not found: {sample["file"]}')
+    
+    strip_query_params = request.args.get('strip_query_params', 'true').lower() == 'true'
+    include_gateway_services = request.args.get('include_gateway_services', 'false').lower() == 'true'
+    include_service_mesh = request.args.get('include_service_mesh', 'false').lower() == 'true'
+    
+    try:
+        analyzer = TraceAnalyzer(
+            strip_query_params=strip_query_params,
+            include_gateway_services=include_gateway_services,
+            include_service_mesh=include_service_mesh
+        )
+        analyzer.process_trace_file(filepath)
+        
+        results = prepare_results(analyzer)
+        
+        return render_template('results.html',
+                             filename=f"{sample['name']} ({sample['file']})",
+                             results=results)
+    
+    except Exception as e:
+        return render_template('index.html',
+                             sample_traces=SAMPLE_TRACES,
+                             error=f'Error analyzing sample: {str(e)}')
 
 
 @app.route('/api/analyze', methods=['POST'])
@@ -88,15 +155,15 @@ def analyze_web():
     Returns: HTML results page
     """
     if 'file' not in request.files:
-        return render_template('index.html', error='No file provided')
+        return render_template('index.html', sample_traces=SAMPLE_TRACES, error='No file provided')
     
     file = request.files['file']
     
     if not file.filename:
-        return render_template('index.html', error='No file selected')
+        return render_template('index.html', sample_traces=SAMPLE_TRACES, error='No file selected')
     
     if not allowed_file(file.filename):
-        return render_template('index.html', error='Invalid file type. Only JSON files are allowed.')
+        return render_template('index.html', sample_traces=SAMPLE_TRACES, error='Invalid file type. Only JSON files are allowed.')
     
     strip_query_params = 'strip_query_params' in request.form
     include_gateway_services = 'include_gateway_services' in request.form
@@ -123,7 +190,7 @@ def analyze_web():
                              results=results)
     
     except Exception as e:
-        return render_template('index.html', error=f'Error analyzing file: {str(e)}')
+        return render_template('index.html', sample_traces=SAMPLE_TRACES, error=f'Error analyzing file: {str(e)}')
 
 
 if __name__ == '__main__':
