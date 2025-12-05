@@ -781,6 +781,37 @@ li[data-state="collapsed"]>ul {
     cursor: help;
 }
 
+/* Sibling parallelism badge on parent nodes (cross-service parallel calls) */
+.metric.sibling-parallel-badge {
+    background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    border: 1px solid rgba(46, 125, 50, 0.3);
+    color: #2e7d32;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    margin-left: 4px;
+    cursor: help;
+}
+
+.metric.sibling-parallel-badge strong {
+    color: #1b5e20;
+}
+
+.metric.sibling-parallel-badge .sibling-details {
+    color: #388e3c;
+    font-size: 0.9em;
+    margin-left: 4px;
+}
+
+/* Marker on individual sibling nodes that are part of parallel group */
+.metric.parallel-sibling-marker {
+    color: #43a047;
+    font-weight: bold;
+    margin-left: 4px;
+    font-size: 0.95em;
+    cursor: help;
+}
+
 /* Slider styling */
 .highlight-slider-container {
     display: flex;

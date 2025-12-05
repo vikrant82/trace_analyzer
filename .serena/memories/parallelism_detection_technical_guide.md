@@ -399,32 +399,71 @@ api-gateway GET /api/composite (0-150ms) ⊗
 
 ---
 
+## Sibling Parallelism Detection (NEW)
+
+### Overview
+Detects parallelism across **different services** called in parallel by a parent span. This complements the existing aggregated parallelism detection (same service fan-out).
+
+### Visual Indicators
+
+**Sibling Badge on Parent** (inline display):
+```
+api-gateway GET /api/composite ⊗ ∥ 2.0× parallel (3 siblings: 180ms cumulative → 90ms effective)
+```
+- Speedup factor prominently shown
+- Sibling count
+- Cumulative time (sum of all siblings)
+- Effective time (wall-clock after overlap)
+- Tooltip: "Children ran in parallel - wall-clock time reduced"
+
+**Sibling Marker on Children** (`∥`):
+```
+  ├─ auth-service POST /validate  ∥
+  ├─ user-service GET /profile    ∥
+  └─ order-service GET /history   ∥
+```
+- Subtle marker with tooltip showing duration
+
+### Implementation Details
+
+**Location:** `trace_analyzer/processors/normalizer.py` → `detect_sibling_parallelism()` inner function
+
+**Trigger:** Called at end of `aggregate_siblings()`, after all grouping/aggregation is complete.
+
+### Node Attributes
+
+**Parent node:**
+- `sibling_parallelism`: True if cross-service parallelism detected
+- `sibling_parallelism_factor`: cumulative / effective (e.g., 2.0)
+- `sibling_effective_time_ms`: Wall-clock time (merged intervals)
+- `sibling_cumulative_time_ms`: Sum of individual durations
+- `parallel_sibling_count`: Number of participating siblings
+
+**Child nodes:**
+- `is_parallel_sibling`: True if part of parallel sibling group
+
+### CSS Classes
+- `.metric.sibling-parallel-badge`: Parent badge styling (green gradient, inline display)
+- `.metric.sibling-parallel-badge strong`: Bold styling for factor
+- `.metric.sibling-parallel-badge .sibling-details`: Lighter styling for details
+- `.metric.parallel-sibling-marker`: Child marker styling (green `∥`)
+
+### Test File
+`tests/unit/test_sibling_parallelism.py`
+
+### Sample Trace
+`sample-trace-parallel-siblings.json`
+
+---
+
 ## Future Enhancements
 
-### 1. Sibling-Level Parallelism Detection
-**Current State:** Only shows parallelism for aggregated nodes (same service+method+path).
-
-**Limitation:** Parent calling 3 different services in parallel shows `⊗` but no child indicators.
-
-**Proposal:** 
-- Detect parallelism across ALL siblings (regardless of service)
-- Add new indicator (e.g., `⚡*` for cross-service parallelism)
-- Calculate effective time for all children of a parent
-
-**Example:**
-```
-api-gateway GET /api/composite ⊗
-  ├─ auth-service POST /validate ⚡* (part of 2.0× parallel group)
-  ├─ user-service GET /profile ⚡* (part of 2.0× parallel group)
-  └─ order-service GET /history ⚡* (part of 2.0× parallel group)
-```
-
-### 2. Parallelism Percentage in Parent Badge
+### 1. Parallelism Percentage in Parent Badge
 **Proposal:** Show percentage of children executing in parallel.
 
 **Example:** `⊗ 85%` (85% of child time overlaps).
 
-### 3. Timeline Visualization
+### 2. Timeline Visualization
 **Proposal:** Gantt chart showing span timelines with visual overlap.
 
 **Benefit:** Immediate visual understanding of concurrency patterns.

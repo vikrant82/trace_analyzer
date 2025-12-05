@@ -271,7 +271,64 @@ class HierarchyNormalizer:
                     }
                     aggregated.append(agg_node)
             
+            # Detect sibling parallelism across ALL final children (regardless of aggregation)
+            detect_sibling_parallelism(aggregated, parent_node)
+            
             return aggregated
+        
+        def detect_sibling_parallelism(all_final_children: List[Dict], parent_node: Optional[Dict]) -> None:
+            """
+            Detect parallelism across ALL siblings at this level, regardless of whether
+            they are aggregated or not. This detects cross-service parallel calls.
+            
+            Sets attributes on parent_node and marks participating children.
+            
+            Args:
+                all_final_children: List of final aggregated/non-aggregated sibling nodes
+                parent_node: The parent node that initiated these parallel calls
+            """
+            if not parent_node or len(all_final_children) < 2:
+                return
+            
+            # Collect valid intervals from ALL children
+            sibling_intervals = []
+            participating_children = []
+            
+            for child in all_final_children:
+                start_ns = child.get('start_time_ns')
+                end_ns = child.get('end_time_ns')
+                if start_ns and end_ns and start_ns < end_ns:
+                    sibling_intervals.append((start_ns, end_ns))
+                    participating_children.append(child)
+            
+            if len(sibling_intervals) < 2:
+                return
+            
+            # Calculate cumulative time (sum of all intervals)
+            cumulative_ms = sum(
+                (end - start) / 1_000_000.0 
+                for start, end in sibling_intervals
+            )
+            
+            # Calculate effective wall-clock time (merged intervals)
+            effective_ms = self.timing_calculator.calculate_wall_clock_ms(sibling_intervals)
+            
+            if effective_ms <= 0:
+                return
+            
+            factor = round(cumulative_ms / effective_ms, 2)
+            
+            # Only mark as sibling parallelism if meaningful (threshold: 1.05)
+            if factor > 1.05:
+                parent_node['sibling_parallelism'] = True
+                parent_node['sibling_parallelism_factor'] = factor
+                parent_node['sibling_effective_time_ms'] = effective_ms
+                parent_node['sibling_cumulative_time_ms'] = cumulative_ms
+                parent_node['parallel_sibling_count'] = len(participating_children)
+                
+                # Mark each participating child
+                for child in participating_children:
+                    child['is_parallel_sibling'] = True
         
         # Normalize and process the root
         root_copy = root_node.copy()

@@ -5,14 +5,22 @@
     "api-gateway GET /api/composite": {
       "total_time": "150ms",
       "self_time": "~60ms (effective child time = 90ms from 10-100ms overlap)",
-      "indicator": "⊗ (has parallel children)",
+      "indicators": {
+        "has_parallel_children": "⊗ (existing aggregated parallelism badge)",
+        "sibling_parallelism_display": "∥ 2.0× parallel (3 siblings: 180ms cumulative → 90ms effective)"
+      },
       "children": [
-        "auth-service POST /validate (50ms)",
-        "user-service GET /profile (60ms)",
-        "order-service GET /history (70ms)"
+        "auth-service POST /validate (50ms) ∥",
+        "user-service GET /profile (60ms) ∥",
+        "order-service GET /history (70ms) ∥"
       ]
     },
-    "note": "No ⚡ indicators expected - parallelism only shows for aggregated nodes in current spec"
+    "sibling_parallelism_details": {
+      "cumulative_time": "180ms (50 + 60 + 70)",
+      "effective_time": "90ms (merged interval 10-100ms)",
+      "parallelism_factor": "2.0×"
+    },
+    "note": "All timing info shown inline - cumulative and effective times visible without tooltip"
   },
   "batches": [
     {
