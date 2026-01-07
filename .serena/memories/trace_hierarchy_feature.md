@@ -179,7 +179,7 @@ The Trace Hierarchy now detects and displays parallel execution patterns, showin
 - Shows `parallelism_factor × parallel (wall_clock_ms effective)`
 - Only displayed when `is_real_parallelism = True` AND `parallelism_factor > 1.05`
 
-**Parent Badge** (`⊗` on parent nodes):
+**Parent Badge** (`⤵⤵` on parent nodes):
 - Marks the node that **introduces** the fan-out
 - Set inline when real parallelism is detected (not via tree traversal)
 - Only the direct parent of parallelized calls gets this badge
@@ -194,11 +194,16 @@ The Trace Hierarchy now detects and displays parallel execution patterns, showin
 
 ### CSS Classes
 - `.metric.parallelism-info`: Styles the `⚡` indicator
-- `.metric.has-parallel-badge`: Styles the `⊗` badge
+- `.metric.has-parallel-badge`: Styles the `⤵⤵` badge
+- `.effective-time-primary`: Green badge for effective (wall-clock) time
+- `.cumulative-time-secondary`: Gray badge for cumulative time
+
+### Sibling Parallelism (Updated January 2026)
+Sibling parallelism detection (`∥` markers) is now **ROOT-LEVEL ONLY** to prevent false positives from sequential parent calls where aggregated child timestamps overlap.
 
 ### Example
 ```
-serviceA (count=1) ⊗         ← marked as fan-out source
+serviceA (count=1) ⤵⤵         ← marked as fan-out source
   └─ serviceB (count=88) ⚡2.8× ← shows parallelism indicator
        └─serviceC (count=88) ← no indicator (inherited)
 ```

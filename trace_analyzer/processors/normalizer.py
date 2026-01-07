@@ -271,15 +271,22 @@ class HierarchyNormalizer:
                     }
                     aggregated.append(agg_node)
             
-            # Detect sibling parallelism across ALL final children (regardless of aggregation)
-            detect_sibling_parallelism(aggregated, parent_node)
+            # Detect sibling parallelism only at root level (where non-aggregated siblings can truly run in parallel)
+            # For nested levels, sibling parallelism is only meaningful if the parent has real parallelism,
+            # which is already shown via the ⚡ indicator on the aggregated node
+            if is_root_level:
+                detect_sibling_parallelism(aggregated, parent_node)
             
             return aggregated
         
         def detect_sibling_parallelism(all_final_children: List[Dict], parent_node: Optional[Dict]) -> None:
             """
-            Detect parallelism across ALL siblings at this level, regardless of whether
-            they are aggregated or not. This detects cross-service parallel calls.
+            Detect parallelism across siblings at root level. This detects cross-service 
+            parallel calls initiated by the root span (e.g., an API gateway calling multiple
+            backend services concurrently).
+            
+            NOTE: This is only called at root level. For nested levels, parallelism is shown
+            via the ⚡ indicator on aggregated nodes.
             
             Sets attributes on parent_node and marks participating children.
             

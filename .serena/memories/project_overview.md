@@ -78,14 +78,14 @@ test-trace.json     # Real-world trace for testing
 ```
 
 ### Documentation
-- `README.md` - Full documentation
-- `QUICKSTART.md` - Quick start guide
-- `TESTING.md` - Comprehensive testing guide
-- `TEST_SUMMARY.md` - Test results and coverage
-- `DOCUMENTATION_INDEX.md` - Central documentation index
-- `architecture_summary.md` - Architecture deep-dive
-- `improvements.md` - Proposed enhancements
-- `trace_analysis.md` - Analysis insights
+- `README.md` - Project introduction and quick links
+- `docs/QUICKSTART.md` - Quick start guide
+- `docs/USER_GUIDE.md` - CLI, Web, and API usage
+- `docs/VISUALIZATION_GUIDE.md` - Visual indicators guide
+- `docs/TESTING.md` - Comprehensive testing guide
+- `docs/ARCHITECTURE.md` - Architecture deep-dive
+- `docs/ANALYSIS.md` - Analysis algorithms
+- `docs/improvements.md` - Proposed enhancements
 
 ### Tests (`tests/`)
 ```

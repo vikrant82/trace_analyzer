@@ -808,7 +808,40 @@ li[data-state="collapsed"]>ul {
     color: #991b1b;
 }
 
-/* Parallelism indicator styling */
+/* Parallelism indicator styling - Option B: Effective as primary, Cumulative as secondary */
+
+/* Primary metric: Effective/Wall-clock time (highlighted, green) */
+.metric.effective-time-primary {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    color: #047857;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2);
+}
+
+.metric.effective-time-primary strong {
+    color: #065f46;
+}
+
+/* Secondary metric: Cumulative time (dimmed/gray) */
+.metric.cumulative-time-secondary {
+    background-color: rgba(156, 163, 175, 0.15);
+    border: 1px solid rgba(156, 163, 175, 0.3);
+    color: #6b7280;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+}
+
+.metric.cumulative-time-secondary strong {
+    color: #4b5563;
+    font-weight: 500;
+}
+
+/* Legacy parallelism-info (kept for backward compatibility) */
 .metric.parallelism-info {
     background-color: rgba(59, 130, 246, 0.1);
     border: 1px solid rgba(59, 130, 246, 0.3);

@@ -46,9 +46,6 @@ Then:
 ```bash
 # Analyze and generate markdown report
 python analyze_trace.py your_trace_file.json
-
-# View the report
-cat trace_analysis.md
 ```
 
 ### Step 3: Explore Results
@@ -96,11 +93,8 @@ The analysis shows:
 
 ## 🆘 Need Help?
 
-Check the full [README.md](README.md) for detailed documentation on:
-- Feature descriptions
-- API endpoints
-- Configuration options
-- Parameter detection rules
-- Docker deployment
-- Performance details
+- [User Guide](USER_GUIDE.md) - Detailed usage for CLI, Web, and API
+- [Visualization Guide](VISUALIZATION_GUIDE.md) - Understanding visual indicators
+- [Architecture](ARCHITECTURE.md) - System design and modules
+- [Testing](TESTING.md) - Running and writing tests
 

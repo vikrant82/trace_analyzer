@@ -101,7 +101,7 @@ graph TD
 These are larger-scale changes that could open up new possibilities for the tool.
 
 ### 3.1. Configurable Normalization Rules
-- **What:** Move the URL normalization regex patterns from being hardcoded in [`analyze_trace.py`](analyze_trace.py) to a configuration file (e.g., `rules.yaml`) or allow them to be specified in the UI.
+- **What:** Move the URL normalization regex patterns from being hardcoded in `analyze_trace.py` to a configuration file (e.g., `rules.yaml`) or allow them to be specified in the UI.
 - **Why:** Different organizations have different URL structures and identifier patterns. Allowing users to define their own rules would make the tool far more flexible and adaptable to different environments without requiring code changes.
 
 ### 3.2. Plugin Architecture for Analyzers

@@ -19,6 +19,31 @@ The current UI is clean, functional, and uses a modern color palette (Blue/Slate
 - **Refinement:** Fixed CSS to prevent highlight bleeding into children.
 - **Default View:** Tree now auto-expands only the "Hot Zones" (>10% impact) by default.
 
+## Completed Improvements (January 2026)
+
+### 2. Parallelism Display UX Fix
+- **Problem:** "Total: 68,871ms (212.5%)" was highlighted but this is cumulative time, while actual wall-clock "7,231ms effective" was secondary.
+- **Solution (Option B):** Visual differentiation
+    - **⚡ Effective:** Primary green badge (`.effective-time-primary`) showing wall-clock time
+    - **Cumulative:** Secondary gray badge (`.cumulative-time-secondary`) showing sum of all child times
+
+### 3. Fan-Out Indicator Change
+- **Problem:** `⊗` (cross in circle) was too abstract for "has parallel children"
+- **Solution:** Changed to `⤵⤵` (branching arrows) for better intuitiveness
+
+### 4. Sibling Parallelism Bug Fix
+- **Problem:** `∥` markers appeared on nodes under sequential parent calls (e.g., ViewLookupByReferenceKeys ×61) when there was no actual parallelism
+- **Root cause:** Sibling parallelism detection was triggered by overlapping timestamps from aggregated sequential calls
+- **Solution:** Limited sibling parallelism detection to root level only (`if is_root_level:` guard in `normalizer.py`)
+
+### 5. Documentation Restructure
+- **Problem:** 568-line README, missing docs, broken links, no visual indicators documentation
+- **Solution:** 
+    - Slim README (~118 lines) with doc table
+    - New `docs/` folder structure
+    - Created `USER_GUIDE.md` and `VISUALIZATION_GUIDE.md`
+    - All visual indicators now documented
+
 ## Suggested Improvements
 
 ### 1. Enhanced File Upload (High Impact)

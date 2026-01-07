@@ -159,16 +159,23 @@ parallelism_factor = round(240 / 100, 2) = 2.4×
 
 ## Visual Indicators
 
-### Parallelism Indicator: `⚡`
+### Parallelism Display: Effective vs Cumulative
 
 **Display Location:** Aggregated child node (the fan-out target)
 
+**Visual Update (January 2026):**
+For parallel nodes, the display now uses Option B visual differentiation:
+- **⚡ Effective:** Primary metric (green badge, highlighted) - actual wall-clock time
+- **Cumulative:** Secondary metric (gray badge, dimmed) - sum of all call durations
+
 **Template Code:** (`templates/results.html`)
 ```jinja2
-{% if node.aggregated and node.parallelism_factor is defined and node.parallelism_factor > 1 and node.wall_clock_ms %}
-<span class="metric parallelism-info" title="...">
-    <strong>⚡ {{ "%.1f"|format(node.parallelism_factor) }}× parallel</strong>
-    <span class="effective-time">({{ "%.2f"|format(node.wall_clock_ms) }}ms effective)</span>
+{% if node.aggregated and node.parallelism_factor > 1 and node.wall_clock_ms %}
+<span class="metric effective-time-primary">
+    <strong>⚡ Effective:</strong> {{ node.wall_clock_ms }} ms ({{ effective_perc }}%)
+</span>
+<span class="metric cumulative-time-secondary">
+    <strong>Cumulative:</strong> {{ node.total_time_ms }} ms (×{{ node.count }} calls, {{ node.parallelism_factor }}× parallel)
 </span>
 {% endif %}
 ```
@@ -177,9 +184,11 @@ parallelism_factor = round(240 / 100, 2) = 2.4×
 
 **CSS Class:** `.metric.parallelism-info`
 
-### Parent Badge: `⊗`
+### Parent Badge: `⤵⤵`
 
 **Display Location:** Parent node (the fan-out source)
+
+**Note:** Changed from `⊗` to `⤵⤵` (branching arrows) for better visual intuitiveness.
 
 **Setting Logic:**
 ```python
@@ -399,54 +408,22 @@ api-gateway GET /api/composite (0-150ms) ⊗
 
 ---
 
-## Sibling Parallelism Detection (NEW)
+## Sibling Parallelism Detection
 
-### Overview
-Detects parallelism across **different services** called in parallel by a parent span. This complements the existing aggregated parallelism detection (same service fan-out).
+### Status Update (January 2026)
+**Sibling parallelism detection is now ROOT-LEVEL ONLY.**
 
-### Visual Indicators
+The `∥` markers and sibling parallelism badges are only detected at the root level of the trace hierarchy. This prevents false positives from sequential parent calls where child timestamps overlap due to aggregation.
 
-**Sibling Badge on Parent** (inline display):
-```
-api-gateway GET /api/composite ⊗ ∥ 2.0× parallel (3 siblings: 180ms cumulative → 90ms effective)
-```
-- Speedup factor prominently shown
-- Sibling count
-- Cumulative time (sum of all siblings)
-- Effective time (wall-clock after overlap)
-- Tooltip: "Children ran in parallel - wall-clock time reduced"
+### Why This Change?
+When sequential parent calls (e.g., 61 calls to `ViewLookupByReferenceKeys`) are aggregated, their children's timestamps span the entire time range of all 61 calls. This made it appear like children were running in parallel, even though within each parent call they ran sequentially.
 
-**Sibling Marker on Children** (`∥`):
-```
-  ├─ auth-service POST /validate  ∥
-  ├─ user-service GET /profile    ∥
-  └─ order-service GET /history   ∥
-```
-- Subtle marker with tooltip showing duration
+### Current Behavior
+- **Root level:** Sibling parallelism is detected and shown with `∥` markers
+- **Nested levels:** No sibling parallelism detection (rely on `⚡` indicators instead)
 
-### Implementation Details
-
-**Location:** `trace_analyzer/processors/normalizer.py` → `detect_sibling_parallelism()` inner function
-
-**Trigger:** Called at end of `aggregate_siblings()`, after all grouping/aggregation is complete.
-
-### Node Attributes
-
-**Parent node:**
-- `sibling_parallelism`: True if cross-service parallelism detected
-- `sibling_parallelism_factor`: cumulative / effective (e.g., 2.0)
-- `sibling_effective_time_ms`: Wall-clock time (merged intervals)
-- `sibling_cumulative_time_ms`: Sum of individual durations
-- `parallel_sibling_count`: Number of participating siblings
-
-**Child nodes:**
-- `is_parallel_sibling`: True if part of parallel sibling group
-
-### CSS Classes
-- `.metric.sibling-parallel-badge`: Parent badge styling (green gradient, inline display)
-- `.metric.sibling-parallel-badge strong`: Bold styling for factor
-- `.metric.sibling-parallel-badge .sibling-details`: Lighter styling for details
-- `.metric.parallel-sibling-marker`: Child marker styling (green `∥`)
+### Code Location
+`trace_analyzer/processors/normalizer.py` → `aggregate_siblings()` and `detect_sibling_parallelism()`
 
 ### Test File
 `tests/unit/test_sibling_parallelism.py`

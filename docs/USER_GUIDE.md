@@ -1,0 +1,263 @@
+# Trace Analyzer User Guide
+
+**Last Updated:** January 7, 2026
+
+This guide covers how to use the Trace Analyzer for analyzing OpenTelemetry traces.
+
+---
+
+## Table of Contents
+
+- [Web Application](#web-application)
+- [Command Line Interface](#command-line-interface)
+- [REST API](#rest-api)
+- [Filtering Options](#filtering-options)
+- [Parameter Detection](#parameter-detection)
+- [Query Parameter Handling](#query-parameter-handling)
+- [Output Format](#output-format)
+
+---
+
+## Web Application
+
+The web interface is the recommended way to use Trace Analyzer.
+
+### Starting the Server
+
+```bash
+python app.py
+```
+
+Then open `http://localhost:5001` in your browser.
+
+### Using the Interface
+
+1. **Upload:** Drag and drop or select your trace JSON file
+2. **Configure:** Set filtering options (see [Filtering Options](#filtering-options))
+3. **Analyze:** Click "Analyze Trace File"
+4. **Explore:** View interactive results with sortable tables and trace hierarchy
+
+### Features
+
+- 📊 Interactive HTML interface
+- 📈 Visual statistics dashboard
+- 🔍 Sortable tables (click column headers)
+- 🌳 Interactive trace hierarchy with expand/collapse
+- 📱 Responsive design
+
+---
+
+## Command Line Interface
+
+For scripting and automation, use the CLI tool.
+
+### Basic Usage
+
+```bash
+python analyze_trace.py trace_file.json
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output` | Custom output file path |
+| `--keep-query-params` | Keep query parameters (default: stripped) |
+| `--include-gateways` | Include gateway/proxy services |
+| `--include-service-mesh` | Include Istio/Envoy sidecars |
+
+### Examples
+
+```bash
+# Basic analysis
+python analyze_trace.py trace.json
+
+# Custom output file
+python analyze_trace.py trace.json -o my_report.md
+
+# Include all service types
+python analyze_trace.py trace.json --include-gateways --include-service-mesh
+```
+
+**Output:** Generates a Markdown file with analysis results.
+
+---
+
+## REST API
+
+For programmatic access, use the REST API.
+
+### Analyze Endpoint
+
+```
+POST /api/analyze
+```
+
+### Request
+
+- **Content-Type:** `multipart/form-data`
+- **Body:**
+  - `file` (required): JSON trace file
+  - `strip_query_params`: "true" (default) or "false"
+  - `include_gateway_services`: "true" or "false"
+  - `include_service_mesh`: "true" or "false"
+
+### Example
+
+```bash
+curl -X POST http://localhost:5001/api/analyze \
+  -F "file=@trace.json" \
+  -F "include_gateway_services=true"
+```
+
+### Response
+
+```json
+{
+  "summary": {
+    "total_requests": 150,
+    "total_time_ms": 45300,
+    "total_time_formatted": "45.30 s",
+    "unique_services": 2,
+    "unique_endpoints": 5
+  },
+  "services": { ... },
+  "service_calls": [ ... ],
+  "trace_hierarchies": [ ... ]
+}
+```
+
+---
+
+## Filtering Options
+
+### Include Gateway Services
+
+**Default:** OFF
+
+Controls whether CLIENT-only services (API gateways, load balancers, proxies) appear in results.
+
+| Setting | Behavior |
+|---------|----------|
+| OFF | Only services with SERVER spans (business logic) |
+| ON | Include gateways and proxies |
+
+**Use Case:** Enable when you need full service topology including forwarding infrastructure.
+
+### Include Service Mesh
+
+**Default:** OFF
+
+Controls whether Istio/Envoy sidecar spans appear in results.
+
+| Setting | Behavior |
+|---------|----------|
+| OFF | Filters out sidecar duplicates (cleanest view) |
+| ON | Shows both application AND sidecar spans |
+
+**Use Case:** Enable when diagnosing service mesh overhead or configuration issues.
+
+### Combined Behavior
+
+| Gateway | Mesh | Result |
+|---------|------|--------|
+| OFF | OFF | **Business logic only** (recommended) |
+| ON | OFF | Business logic + gateways |
+| OFF | ON | Business logic + sidecar duplicates |
+| ON | ON | **Complete infrastructure** |
+
+---
+
+## Parameter Detection
+
+The analyzer automatically detects and normalizes URL parameters:
+
+### Detection Rules
+
+| Type | Pattern | Normalized | Tracked? |
+|------|---------|------------|----------|
+| UUID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` | `{uuid}` | ❌ Ignored |
+| Rule ID | `AppName__ResourceName` | `{rule_id}` | ✅ Yes |
+| Encoded | Base64-like (30+ chars) | `{encoded_id}` | ✅ Yes |
+| Numeric | `/123`, `/456` | `{id}` | ✅ Yes |
+
+### Example
+
+```
+Input:  /v1/a21a1909-c664-41be-bfc5-9a3ce0dae52c/users/123
+Output: /v1/{uuid}/users/{id}
+Tracked: {id} = 123 (UUID ignored)
+```
+
+### Detection Order
+
+1. UUIDs (ignored)
+2. Rule IDs (tracked)
+3. Long encoded strings (tracked)
+4. Numeric IDs (tracked)
+
+---
+
+## Query Parameter Handling
+
+**Default:** Query parameters are stripped.
+
+### Example
+
+```
+Before: /data-pages/App__Resource?param1=abc&param2=xyz
+After:  /data-pages/{rule_id}
+```
+
+### When to Keep Query Parameters
+
+- Query parameters represent different endpoints (rare)
+- Debugging specific parameter combinations
+
+### How to Disable Stripping
+
+- **CLI:** `--keep-query-params`
+- **Web UI:** Uncheck "Strip query parameters"
+- **API:** `strip_query_params=false`
+
+---
+
+## Output Format
+
+### Report Sections
+
+1. **Summary Statistics**
+   - Total requests, time, services, endpoints
+
+2. **Trace Hierarchy** (Web only)
+   - Interactive tree visualization
+   - See [Visualization Guide](VISUALIZATION_GUIDE.md) for details
+
+3. **Services Overview**
+   - Incoming requests by service
+   - Sorted by total time (descending)
+
+4. **Service-to-Service Calls**
+   - Outgoing HTTP calls between services
+   - Grouped by caller → callee pairs
+
+5. **Kafka/Messaging Operations**
+   - Consumer and producer operations
+   - Performance metrics
+
+### Timing Display
+
+| Duration | Format |
+|----------|--------|
+| < 1s | `245.50 ms` |
+| < 1m | `12.45 s` |
+| ≥ 1m | `2m 15.30s` |
+
+---
+
+## Related Documentation
+
+- [Quick Start Guide](QUICKSTART.md) - Get started in 3 steps
+- [Visualization Guide](VISUALIZATION_GUIDE.md) - Understanding the trace hierarchy
+- [Architecture](ARCHITECTURE.md) - System design and modules
+- [Analysis](ANALYSIS.md) - Trace processing algorithms

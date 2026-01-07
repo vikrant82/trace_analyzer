@@ -12,14 +12,14 @@ The fundamental difference is one of purpose:
 
 This is the most significant benefit. While Jaeger can show individual requests, it often struggles with high-cardinality endpoints, treating `/api/users/123` and `/api/users/456` as distinct operations.
 
-- **How Trace Analyzer is Different:** The `normalize_path` function in [`analyze_trace.py`](analyze_trace.py:41) uses multiple regular expressions to intelligently group similar endpoints. It normalizes UUIDs, numeric IDs, and even application-specific identifiers (e.g., `AppName__ResourceName`) into placeholders like `{uuid}` and `{id}`.
+- **How Trace Analyzer is Different:** The `normalize_path` function in `trace_analyzer/extractors/path_normalizer.py` uses multiple regular expressions to intelligently group similar endpoints. It normalizes UUIDs, numeric IDs, and even application-specific identifiers (e.g., `AppName__ResourceName`) into placeholders like `{uuid}` and `{id}`.
 - **Benefit:** This provides a clean, high-level, and actionable view of performance. Instead of a noisy list of thousands of unique URLs, you get a concise report showing the aggregated performance (total time, count, average time) for endpoint *patterns*. This makes it far easier to identify systemic issues with a particular type of operation.
 
 ### 2. Accurate `Self-Time` Calculation at Scale
 
 Understanding the time a function spends executing its own logic, excluding time spent in downstream calls (`self-time`), is critical for pinpointing bottlenecks.
 
-- **How Trace Analyzer is Different:** The architecture is explicitly designed to calculate this accurately. The "four-pass system" described in [`architecture_summary.md`](architecture_summary.md:27) first builds a complete and corrected trace hierarchy (including "adopting" orphaned spans) and *then* performs a recursive, bottom-up calculation (`_calculate_hierarchy_timings`) to determine the `self_time` for every single span. This value is then aggregated in the final report.
+- **How Trace Analyzer is Different:** The architecture is explicitly designed to calculate this accurately. The "five-pass system" described in [ARCHITECTURE.md](ARCHITECTURE.md) first builds a complete and corrected trace hierarchy (including "adopting" orphaned spans) and *then* performs a recursive, bottom-up calculation (`_calculate_hierarchy_timings`) to determine the `self_time` for every single span. This value is then aggregated in the final report.
 - **Benefit:** While Jaeger's timeline view implies self-time, this tool calculates and **aggregates** it across all processed traces. The final report, sorted by "Total Time", immediately highlights the functions and endpoints where the most time is being spent *in the functions themselves*, providing a clear signal for optimization efforts.
 
 ### 3. Offline, In-Depth, and Portable Analysis

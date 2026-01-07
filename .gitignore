@@ -50,3 +50,5 @@ trace_analysis.md
 uploads/
 temp/
 
+.kilocode/mcp.json
+.roo/mcp.json
