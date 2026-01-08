@@ -79,9 +79,11 @@
                 
                 {# Sibling parallelism indicator on parent nodes (cross-service parallel calls) #}
                 {% if node.sibling_parallelism %}
-                <span class="metric sibling-parallel-badge" title="Children ran in parallel - wall-clock time reduced">
-                    <strong>∥ {{ "%.1f"|format(node.sibling_parallelism_factor) }}× parallel</strong>
-                    <span class="sibling-details">({{ node.parallel_sibling_count }} siblings: {{ "%.0f"|format(node.sibling_cumulative_time_ms) }}ms cumulative → {{ "%.0f"|format(node.sibling_effective_time_ms) }}ms effective)</span>
+                <span class="metric effective-time-primary" title="Effective wall-clock time (children ran in parallel)">
+                    ⚡ <strong>Effective:</strong> {{ "%.2f"|format(node.sibling_effective_time_ms) }} ms ({{ "%.1f"|format(node.sibling_effective_time_ms / total_trace_time * 100) }}%)
+                </span>
+                <span class="metric cumulative-time-secondary" title="Sum of all sibling call times">
+                    Cumulative: {{ "%.0f"|format(node.sibling_cumulative_time_ms) }}ms (×{{ node.parallel_sibling_count }} siblings, {{ "%.1f"|format(node.sibling_parallelism_factor) }}× parallel)
                 </span>
                 {% endif %}
                 
