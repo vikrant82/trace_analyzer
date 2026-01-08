@@ -207,7 +207,7 @@ class HierarchyNormalizer:
                             wall_clock_ms = self.timing_calculator.calculate_wall_clock_ms(child_intervals)
                             if wall_clock_ms > 0:
                                 parallelism_factor = round(total_time / wall_clock_ms, 2)
-                                if parallelism_factor <= 1.05:
+                                if parallelism_factor <= 1.15:
                                     parallelism_factor = 1.0
                                     wall_clock_ms = None
                                 else:
@@ -271,22 +271,29 @@ class HierarchyNormalizer:
                     }
                     aggregated.append(agg_node)
             
-            # Detect sibling parallelism only at root level (where non-aggregated siblings can truly run in parallel)
-            # For nested levels, sibling parallelism is only meaningful if the parent has real parallelism,
-            # which is already shown via the ⚡ indicator on the aggregated node
-            if is_root_level:
+            # Detect sibling parallelism when:
+            # 1. At root level (direct children of trace root), OR
+            # 2. Parent is NOT aggregated (count=1) - single parent with multiple different children
+            # 
+            # This avoids false positives from sequential aggregated calls (e.g., 61 calls to serviceA
+            # each with one child call to serviceB - the 61 serviceB calls are NOT parallel siblings)
+            if is_root_level or parent_count == 1:
                 detect_sibling_parallelism(aggregated, parent_node)
             
             return aggregated
         
         def detect_sibling_parallelism(all_final_children: List[Dict], parent_node: Optional[Dict]) -> None:
             """
-            Detect parallelism across siblings at root level. This detects cross-service 
-            parallel calls initiated by the root span (e.g., an API gateway calling multiple
-            backend services concurrently).
+            Detect parallelism across siblings (different services running concurrently).
+            This detects cross-service parallel calls (e.g., an API gateway calling auth,
+            user, and order services concurrently).
             
-            NOTE: This is only called at root level. For nested levels, parallelism is shown
-            via the ⚡ indicator on aggregated nodes.
+            Called when:
+            - Root level (direct children of trace root), OR
+            - Parent is NOT aggregated (count=1)
+            
+            This avoids false positives from sequential aggregated calls where children's
+            aggregated timestamps overlap due to parent aggregation.
             
             Sets attributes on parent_node and marks participating children.
             
@@ -325,13 +332,15 @@ class HierarchyNormalizer:
             
             factor = round(cumulative_ms / effective_ms, 2)
             
-            # Only mark as sibling parallelism if meaningful (threshold: 1.05)
-            if factor > 1.05:
+            # Only mark as sibling parallelism if meaningful (threshold: 1.15)
+            if factor > 1.15:
                 parent_node['sibling_parallelism'] = True
                 parent_node['sibling_parallelism_factor'] = factor
                 parent_node['sibling_effective_time_ms'] = effective_ms
                 parent_node['sibling_cumulative_time_ms'] = cumulative_ms
                 parent_node['parallel_sibling_count'] = len(participating_children)
+                # Also mark parent as having parallel children (for ⤵⤵ indicator)
+                parent_node['has_parallel_children'] = True
                 
                 # Mark each participating child
                 for child in participating_children:

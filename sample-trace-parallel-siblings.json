@@ -1,26 +1,27 @@
 {
   "comment": "Trace demonstrating parallel sibling calls to DIFFERENT services (non-aggregated)",
-  "description": "Parent calls auth, user, and order services in parallel - tests sibling-level parallelism",
+  "description": "Parent calls auth, user, and order services in parallel - tests aggregated parallelism",
   "expected_output": {
     "api-gateway GET /api/composite": {
       "total_time": "150ms",
       "self_time": "~60ms (effective child time = 90ms from 10-100ms overlap)",
       "indicators": {
-        "has_parallel_children": "⊗ (existing aggregated parallelism badge)",
-        "sibling_parallelism_display": "∥ 2.0× parallel (3 siblings: 180ms cumulative → 90ms effective)"
+        "has_parallel_children": "⤵⤵ (branching arrows showing fan-out)",
+        "parallelism_display": "⚡ 2.0× parallelism shown on parent via aggregation"
       },
       "children": [
-        "auth-service POST /validate (50ms) ∥",
-        "user-service GET /profile (60ms) ∥",
-        "order-service GET /history (70ms) ∥"
+        "auth-service POST /validate (50ms)",
+        "user-service GET /profile (60ms)",
+        "order-service GET /history (70ms)"
       ]
     },
-    "sibling_parallelism_details": {
+    "parallelism_details": {
       "cumulative_time": "180ms (50 + 60 + 70)",
       "effective_time": "90ms (merged interval 10-100ms)",
-      "parallelism_factor": "2.0×"
+      "parallelism_factor": "2.0×",
+      "display": "⚡ Effective: 90ms green badge, Cumulative: 180ms gray badge"
     },
-    "note": "All timing info shown inline - cumulative and effective times visible without tooltip"
+    "note": "Parallelism is shown via ⚡ indicator on parent. Individual sibling ∥ markers removed (root-level only restriction to prevent false positives from sequential aggregated calls)"
   },
   "batches": [
     {
