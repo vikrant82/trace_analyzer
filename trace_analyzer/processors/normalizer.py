@@ -189,31 +189,34 @@ class HierarchyNormalizer:
                     # Use first for filtering, count for parallelism detection
                     aggregated_grandchildren = aggregate_siblings(all_grandchildren, first, parent_count=count, is_root_level=False)
                     
-                    # Calculate parallelism - but only show if it's "real" parallelism
-                    # Real parallelism: This node was fan-out target (count > parent count or it's root level)
-                    # Inherited parallelism: 1:1 mapping with parent (count == parent count)
+                    # Calculate parallelism for ALL aggregated nodes (count > 1)
+                    # This shows effective wall-clock time vs cumulative time for any parallel execution
+                    # 
+                    # "Real" parallelism (for ⤵⤵ badge on parent) is only when fan-out occurs:
+                    # - count > parent_count: This node has MORE calls than its parent (fan-out)
+                    # - is_root_level: Direct children of root
                     parallelism_factor = 1.0
                     wall_clock_ms = None
                     is_real_parallelism = is_root_level or count > parent_count
                     
-                    if is_real_parallelism:
-                        child_intervals = [
-                            (c.get('start_time_ns', 0), c.get('end_time_ns', 0))
-                            for c in group_children
-                            if c.get('start_time_ns') is not None and c.get('end_time_ns') is not None
-                               and c.get('start_time_ns') < c.get('end_time_ns')
-                        ]
-                        if len(child_intervals) > 1:
-                            wall_clock_ms = self.timing_calculator.calculate_wall_clock_ms(child_intervals)
-                            if wall_clock_ms > 0:
-                                parallelism_factor = round(total_time / wall_clock_ms, 2)
-                                if parallelism_factor <= 1.15:
-                                    parallelism_factor = 1.0
-                                    wall_clock_ms = None
-                                else:
-                                    # Mark the DIRECT parent as having parallel children
-                                    # This only marks the node that introduces the fan-out
-                                    parent_node['has_parallel_children'] = True
+                    # Always calculate wall_clock for aggregated nodes to show effective time
+                    child_intervals = [
+                        (c.get('start_time_ns', 0), c.get('end_time_ns', 0))
+                        for c in group_children
+                        if c.get('start_time_ns') is not None and c.get('end_time_ns') is not None
+                           and c.get('start_time_ns') < c.get('end_time_ns')
+                    ]
+                    if len(child_intervals) > 1:
+                        wall_clock_ms = self.timing_calculator.calculate_wall_clock_ms(child_intervals)
+                        if wall_clock_ms > 0:
+                            parallelism_factor = round(total_time / wall_clock_ms, 2)
+                            if parallelism_factor <= 1.15:
+                                parallelism_factor = 1.0
+                                wall_clock_ms = None
+                            elif is_real_parallelism:
+                                # Mark the DIRECT parent as having parallel children
+                                # Only for "real" fan-out (not inherited parallelism)
+                                parent_node['has_parallel_children'] = True
                     
                     # Calculate time bounds for aggregated node (min start, max end)
                     start_times = [c.get('start_time_ns', 0) for c in group_children if c.get('start_time_ns')]
@@ -295,7 +298,7 @@ class HierarchyNormalizer:
             This avoids false positives from sequential aggregated calls where children's
             aggregated timestamps overlap due to parent aggregation.
             
-            Sets attributes on parent_node and marks participating children.
+            Sets attributes on parent_node and marks ONLY children that overlap with others.
             
             Args:
                 all_final_children: List of final aggregated/non-aggregated sibling nodes
@@ -304,28 +307,44 @@ class HierarchyNormalizer:
             if not parent_node or len(all_final_children) < 2:
                 return
             
-            # Collect valid intervals from ALL children
-            sibling_intervals = []
-            participating_children = []
+            # Collect valid intervals from ALL children with their indices
+            children_with_intervals = []
             
-            for child in all_final_children:
+            for i, child in enumerate(all_final_children):
                 start_ns = child.get('start_time_ns')
                 end_ns = child.get('end_time_ns')
                 if start_ns and end_ns and start_ns < end_ns:
-                    sibling_intervals.append((start_ns, end_ns))
-                    participating_children.append(child)
+                    children_with_intervals.append((i, child, start_ns, end_ns))
             
-            if len(sibling_intervals) < 2:
+            if len(children_with_intervals) < 2:
                 return
             
-            # Calculate cumulative time (sum of all intervals)
+            # Find which children actually overlap with at least one other child
+            overlapping_indices = set()
+            
+            for i, (idx_a, child_a, start_a, end_a) in enumerate(children_with_intervals):
+                for idx_b, child_b, start_b, end_b in children_with_intervals[i + 1:]:
+                    # Check if intervals overlap: A.start < B.end AND B.start < A.end
+                    if start_a < end_b and start_b < end_a:
+                        overlapping_indices.add(idx_a)
+                        overlapping_indices.add(idx_b)
+            
+            if len(overlapping_indices) < 2:
+                return
+            
+            # Calculate metrics only for overlapping children
+            overlapping_intervals = [
+                (start_ns, end_ns) 
+                for idx, child, start_ns, end_ns in children_with_intervals 
+                if idx in overlapping_indices
+            ]
+            
             cumulative_ms = sum(
                 (end - start) / 1_000_000.0 
-                for start, end in sibling_intervals
+                for start, end in overlapping_intervals
             )
             
-            # Calculate effective wall-clock time (merged intervals)
-            effective_ms = self.timing_calculator.calculate_wall_clock_ms(sibling_intervals)
+            effective_ms = self.timing_calculator.calculate_wall_clock_ms(overlapping_intervals)
             
             if effective_ms <= 0:
                 return
@@ -338,13 +357,57 @@ class HierarchyNormalizer:
                 parent_node['sibling_parallelism_factor'] = factor
                 parent_node['sibling_effective_time_ms'] = effective_ms
                 parent_node['sibling_cumulative_time_ms'] = cumulative_ms
-                parent_node['parallel_sibling_count'] = len(participating_children)
-                # Also mark parent as having parallel children (for ⤵⤵ indicator)
+                parent_node['parallel_sibling_count'] = len(overlapping_indices)
                 parent_node['has_parallel_children'] = True
                 
-                # Mark each participating child
-                for child in participating_children:
-                    child['is_parallel_sibling'] = True
+                # Mark ONLY children that actually overlap with others
+                for idx, child, _, _ in children_with_intervals:
+                    if idx in overlapping_indices:
+                        child['is_parallel_sibling'] = True
+        
+        def calculate_timeline_positions(node: Dict) -> None:
+            """
+            Calculate relative timeline positions for children within parent's time window.
+            This enables visual timeline bars showing where each child falls.
+            
+            Adds to each child:
+            - timeline_start_pct: Start position as % of parent's effective time (0-100)
+            - timeline_end_pct: End position as % of parent's effective time (0-100)
+            """
+            children = node.get('children', [])
+            if not children:
+                return
+            
+            # Get parent's time window
+            parent_start = node.get('start_time_ns', 0)
+            parent_end = node.get('end_time_ns', 0)
+            parent_duration = parent_end - parent_start if parent_end > parent_start else 0
+            
+            if parent_duration <= 0:
+                # Recurse anyway
+                for child in children:
+                    calculate_timeline_positions(child)
+                return
+            
+            # Calculate relative positions for each child
+            for child in children:
+                child_start = child.get('start_time_ns', parent_start)
+                child_end = child.get('end_time_ns', parent_end)
+                
+                # Clamp to parent's window
+                child_start = max(child_start, parent_start)
+                child_end = min(child_end, parent_end)
+                
+                # Calculate percentages
+                start_pct = (child_start - parent_start) / parent_duration * 100
+                end_pct = (child_end - parent_start) / parent_duration * 100
+                
+                child['timeline_start_pct'] = round(start_pct, 1)
+                child['timeline_end_pct'] = round(end_pct, 1)
+                child['timeline_width_pct'] = round(end_pct - start_pct, 1)
+                
+                # Recurse
+                calculate_timeline_positions(child)
         
         # Normalize and process the root
         root_copy = root_node.copy()
@@ -359,5 +422,8 @@ class HierarchyNormalizer:
         
         # Recalculate self-times after filtering and lifting
         self.timing_calculator.recalculate_self_times(root_copy)
+        
+        # Calculate timeline positions for visualization
+        calculate_timeline_positions(root_copy)
         
         return root_copy

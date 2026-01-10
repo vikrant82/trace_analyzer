@@ -92,6 +92,22 @@
                 <span class="metric parallel-sibling-marker" title="Part of parallel sibling group ({{ "%.1f"|format(node.total_time_ms) }}ms)">∥</span>
                 {% endif %}
             </div>
+            
+            {# Full-width timeline bar showing position within parent's time window #}
+            {# Span shows temporal range, solid fill shows work density within that span #}
+            {% if node.timeline_width_pct is defined and node.timeline_width_pct > 0 %}
+            {# Calculate effective time and span duration #}
+            {% set effective_time = node.wall_clock_ms if node.wall_clock_ms else node.total_time_ms %}
+            {% set span_duration_ns = (node.end_time_ns - node.start_time_ns) if node.end_time_ns and node.start_time_ns else 0 %}
+            {% set span_duration_ms = span_duration_ns / 1000000.0 if span_duration_ns > 0 else effective_time %}
+            {# Work density: how much of the span is actual work (capped at 100%) #}
+            {% set work_density = (effective_time / span_duration_ms * 100) if span_duration_ms > 0 else 100 %}
+            {% set work_density_capped = [work_density, 100]|min %}
+            <div class="timeline-bar-fullwidth" title="Timeline: {{ '%.0f'|format(node.timeline_start_pct) }}%-{{ '%.0f'|format(node.timeline_end_pct) }}% | Density: {{ '%.0f'|format(work_density_capped) }}% ({{ '%.0f'|format(effective_time) }}ms work in {{ '%.0f'|format(span_duration_ms) }}ms span)">
+                <div class="timeline-bar-span" style="left: {{ node.timeline_start_pct }}%; width: {{ node.timeline_width_pct }}%;"></div>
+                <div class="timeline-bar-work" style="left: {{ node.timeline_start_pct }}%; width: {{ (node.timeline_width_pct * work_density_capped / 100)|round(1) }}%;"></div>
+            </div>
+            {% endif %}
         </div>
         {% if node.children %}
         <ul>
