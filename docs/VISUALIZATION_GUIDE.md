@@ -111,6 +111,44 @@ Cumulative: 68,871.85 ms (×73 calls, 9.5× parallel)
 | 2.0× | Average 2 calls concurrent |
 | 9.5× | Average 9.5 calls concurrent |
 
+### ∥ Sibling Parallelism Marker
+
+**Visual:** Blue badge with parallel bars symbol
+
+**Location:** On individual child spans that run concurrently with siblings
+
+**Meaning:** This child overlaps in time with other children of the same parent.
+
+**When shown:**
+- Multiple different children (different services/endpoints) run concurrently
+- Only marked on children that actually overlap with at least one sibling
+
+### Timeline Bars
+
+**Visual:** Horizontal bar below each span's metrics
+
+**Components:**
+- **Light span (border):** Shows when the span happened (start % - end %)
+- **Solid fill:** Shows work density (effective time / span duration)
+
+**Example:**
+```
+CurrentUser (×73): Effective 275ms across 3500ms span
+[░░░█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]
+     ↑ 8% filled (275/3500 = scattered, lightweight)
+
+BasicRuleLookup (×73): Effective 3333ms across 3400ms span  
+[    ████████████████████████████████████████████████████████░]
+     ↑ 98% filled (3333/3400 = concentrated, heavyweight)
+```
+
+**Tooltip:** Shows timeline range and density percentage
+
+**Interpretation:**
+- **Full span, thin fill:** Calls are scattered but lightweight
+- **Partial span, full fill:** Calls are concentrated and heavyweight
+- **Orange color:** For parallel siblings (marked with ∥)
+
 ---
 
 ## Error Indicators
@@ -229,6 +267,8 @@ When enabled, hides nodes that are:
 | 🔴 Red border | High self time | Bottleneck (actually slow) |
 | ⤵⤵ | Purple badge | Has parallel children below |
 | ⚡ Effective | Green badge | Parallel execution metrics |
+| ∥ | Blue badge | Part of sibling parallel group |
+| Timeline bar | Horizontal bar | Position and density within parent |
 | 🔴 Pulsing dot | Red circle | Error span indicator |
 | ❌ Error | Red badge | Error with details/count |
 

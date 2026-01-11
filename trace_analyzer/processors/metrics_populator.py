@@ -4,6 +4,7 @@ Metrics populator for flat summary tables.
 
 from typing import Dict
 from collections import defaultdict
+from ..formatters.interval_merger import calculate_effective_times
 
 
 class MetricsPopulator:
@@ -33,7 +34,12 @@ class MetricsPopulator:
             span_nodes: Flat mapping of span_id -> node
             
         Returns:
-            Tuple of (endpoint_params, service_calls, kafka_messages)
+            Tuple of (endpoint_params, service_calls, kafka_messages, effective_times)
+            where effective_times is a dict with keys:
+              - 'endpoints': {key: effective_ms}
+              - 'service_calls': {key: effective_ms}  
+              - 'kafka': {key: effective_ms}
+              - 'services': {service_name: effective_ms}
         """
         endpoint_params = defaultdict(lambda: {
             'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0,
@@ -47,6 +53,12 @@ class MetricsPopulator:
             'count': 0, 'total_time_ms': 0.0,
             'error_count': 0, 'error_messages': defaultdict(int)
         })
+        
+        # Interval collectors for effective time calculation
+        endpoint_intervals = defaultdict(list)
+        service_call_intervals = defaultdict(list)
+        kafka_intervals = defaultdict(list)
+        service_intervals = defaultdict(list)
         
         # Pre-pass: When include_gateway_services is True, collect all services that have SERVER spans
         services_with_server_spans = set()
@@ -69,6 +81,11 @@ class MetricsPopulator:
             # Read the final, correct time values from the node
             total_time = node['total_time_ms']
             self_time = node['self_time_ms']
+            
+            # Extract timestamps for interval calculation
+            start_ns = span.get('startTimeUnixNano', 0)
+            end_ns = span.get('endTimeUnixNano', 0)
+            interval = (start_ns, end_ns) if start_ns and end_ns else None
             
             # Use intelligent error extraction
             from ..extractors.error_extractor import ErrorExtractor
@@ -120,6 +137,10 @@ class MetricsPopulator:
                     if is_error and error_message:
                         endpoint_params[key]['error_count'] += 1
                         endpoint_params[key]['error_messages'][error_message] += 1
+                    # Collect interval for effective time calculation
+                    if interval:
+                        endpoint_intervals[key].append(interval)
+                        service_intervals[node['service_name']].append(interval)
                 
                 # Apply filtering logic for CLIENT spans based on configuration
                 elif span_kind == 'SPAN_KIND_CLIENT':
@@ -134,6 +155,10 @@ class MetricsPopulator:
                             if is_error and error_message:
                                 endpoint_params[key]['error_count'] += 1
                                 endpoint_params[key]['error_messages'][error_message] += 1
+                            # Collect interval for effective time calculation
+                            if interval:
+                                endpoint_intervals[key].append(interval)
+                                service_intervals[node['service_name']].append(interval)
                     
                     # Always track service-to-service calls
                     if self.config.include_service_mesh:
@@ -152,6 +177,9 @@ class MetricsPopulator:
                         if is_error and error_message:
                             service_calls[key]['error_count'] += 1
                             service_calls[key]['error_messages'][error_message] += 1
+                        # Collect interval for effective time calculation
+                        if interval:
+                            service_call_intervals[key].append(interval)
             else:
                 op_type, msg_type, details = self.kafka_extractor.extract_kafka_info(span, attributes)
                 if op_type in ['consumer', 'producer']:
@@ -161,5 +189,18 @@ class MetricsPopulator:
                     if is_error and error_message:
                         kafka_messages[key]['error_count'] += 1
                         kafka_messages[key]['error_messages'][error_message] += 1
+                    # Collect interval for effective time calculation
+                    if interval:
+                        kafka_intervals[key].append(interval)
         
-        return endpoint_params, service_calls, kafka_messages
+        # Calculate effective times for all groupings
+        effective_times = {
+            'endpoints': calculate_effective_times(endpoint_intervals),
+            'service_calls': calculate_effective_times(service_call_intervals),
+            'kafka': calculate_effective_times(kafka_intervals),
+            'services': calculate_effective_times({(k,): v for k, v in service_intervals.items()})
+        }
+        # Flatten services dict to use service name as key instead of tuple
+        effective_times['services'] = {k[0]: v for k, v in effective_times['services'].items()}
+        
+        return endpoint_params, service_calls, kafka_messages, effective_times

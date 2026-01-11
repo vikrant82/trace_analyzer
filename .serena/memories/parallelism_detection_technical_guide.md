@@ -425,33 +425,33 @@ When sequential parent calls (e.g., 61 calls to `ViewLookupByReferenceKeys`) are
 ### Code Location
 `trace_analyzer/processors/normalizer.py` → `aggregate_siblings()` and `detect_sibling_parallelism()`
 
-### Test File
-`tests/unit/test_sibling_parallelism.py`
+### Timeline Visualization
 
-### Sample Trace
-`sample-trace-parallel-siblings.json`
+For sibling parallelism visualization, timeline bars show position and work density.
 
----
+## Table-Level Effective Time Calculation
 
-## Future Enhancements
+For summary tables (Services Overview, Incoming Requests, Service Calls, Kafka), effective time accounts for parallel execution using interval merging.
 
-### 1. Parallelism Percentage in Parent Badge
-**Proposal:** Show percentage of children executing in parallel.
+### Interval Merging Algorithm (`interval_merger.py`)
 
-**Example:** `⊗ 85%` (85% of child time overlaps).
+```python
+def merge_intervals(intervals: List[Tuple[int, int]]) -> int:
+    """
+    1. Sort intervals by start time
+    2. Merge overlapping intervals
+    3. Sum durations of merged intervals
+    """
+```
 
-### 2. Timeline Visualization
-**Proposal:** Gantt chart showing span timelines with visual overlap.
+### Data Flow
 
-**Benefit:** Immediate visual understanding of concurrency patterns.
+1. **metrics_populator.py**: Collects `(start_ns, end_ns)` intervals per grouping key
+2. **analyzer.py**: Stores `effective_times` dict with categories: `endpoints`, `service_calls`, `kafka`, `services`
+3. **result_builder.py**: Calculates parallelism factor = cumulative/effective, flags `has_parallelism` if >1.15
 
----
+### Display Format
 
-## Key Takeaways
-
-1. **Interval merging** is the core algorithm - master this to understand the feature.
-2. **Real vs inherited parallelism** prevents noise in the UI - always check `is_real_parallelism`.
-3. **Self-time fix** is critical - without effective time calculation, parallel parents show 0ms self-time.
-4. **Timestamps** must flow through entire pipeline - any break prevents parallelism detection.
-5. **Threshold of 1.05** filters rounding errors - don't show `⚡ 1.0×`.
-6. **Current spec limitation:** Only detects aggregated parallelism, not cross-service sibling parallelism.
+When `has_parallelism` is true:
+- **Effective**: `⚡ 4.2s` (green badge) - actual wall-clock time
+- **Cumulative**: `Σ 36.44s (8.7×)` (gray) - sum of all call durations

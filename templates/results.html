@@ -233,7 +233,7 @@
                             <tr>
                                 <th>Service Name</th>
                                 <th class="sortable" data-sort="number">Requests <span class="sort-icon"></span></th>
-                                <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span></th>
+                                <th class="sortable" data-sort="time">Time <span class="sort-icon"></span></th>
                                 <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
                                 <th class="sortable" data-sort="number">Unique Endpoints <span class="sort-icon"></span>
                                 </th>
@@ -246,7 +246,14 @@
                                     <a href="#service-{{ loop.index }}">{{ service.name }}</a>
                                 </td>
                                 <td>{{ service.request_count }}</td>
-                                <td class="time-cell">{{ service.total_time_formatted }}</td>
+                                <td class="time-cell">
+                                    {% if service.has_parallelism %}
+                                    <span class="effective-time-primary">⚡ {{ service.effective_time_formatted }}</span>
+                                    <span class="cumulative-time-secondary">Σ {{ service.total_time_formatted }} ({{ "%.1f"|format(service.parallelism_factor) }}×)</span>
+                                    {% else %}
+                                    {{ service.total_time_formatted }}
+                                    {% endif %}
+                                </td>
                                 <td class="time-cell">{{ service.total_self_time_formatted }}</td>
                                 <td>{{ service.unique_combinations }}</td>
                             </tr>
@@ -266,7 +273,11 @@
                     <h3>{{ service.name }}</h3>
                     <div class="service-stats">
                         <span><strong>Requests:</strong> {{ service.request_count }}</span>
-                        <span><strong>Total Time:</strong> {{ service.total_time_formatted }}</span>
+                        {% if service.has_parallelism %}
+                        <span><strong>Time:</strong> <span class="effective-time-primary">⚡ {{ service.effective_time_formatted }}</span> <span class="cumulative-time-secondary">Σ {{ service.total_time_formatted }}</span></span>
+                        {% else %}
+                        <span><strong>Time:</strong> {{ service.total_time_formatted }}</span>
+                        {% endif %}
                         <span><strong>Self Time:</strong> {{ service.total_self_time_formatted }}</span>
                         <span><strong>Unique:</strong> {{ service.unique_combinations }}</span>
                     </div>
@@ -278,7 +289,7 @@
                                     <th>Normalized Endpoint</th>
                                     <th>Parameter Value</th>
                                     <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span>
+                                    <th class="sortable" data-sort="time">Time <span class="sort-icon"></span>
                                     </th>
                                     <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
                                 </tr>
@@ -296,7 +307,14 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ endpoint.count }}</td>
-                                    <td class="time-cell">{{ endpoint.total_time_formatted }}</td>
+                                    <td class="time-cell">
+                                        {% if endpoint.has_parallelism %}
+                                        <span class="effective-time-primary">⚡ {{ endpoint.effective_time_formatted }}</span>
+                                        <span class="cumulative-time-secondary">Σ {{ endpoint.total_time_formatted }} ({{ "%.1f"|format(endpoint.parallelism_factor) }}×)</span>
+                                        {% else %}
+                                        {{ endpoint.total_time_formatted }}
+                                        {% endif %}
+                                    </td>
                                     <td class="time-cell">{{ endpoint.total_self_time_formatted }}</td>
                                 </tr>
                                 {% endfor %}
@@ -318,7 +336,11 @@
                     <h3>{{ call_pair.caller }} → {{ call_pair.callee }}</h3>
                     <div class="service-stats">
                         <span><strong>Total Calls:</strong> {{ call_pair.total_calls }}</span>
-                        <span><strong>Total Time:</strong> {{ call_pair.total_time_formatted }}</span>
+                        {% if call_pair.has_parallelism %}
+                        <span><strong>Time:</strong> <span class="effective-time-primary">⚡ {{ call_pair.effective_time_formatted }}</span> <span class="cumulative-time-secondary">Σ {{ call_pair.total_time_formatted }}</span></span>
+                        {% else %}
+                        <span><strong>Time:</strong> {{ call_pair.total_time_formatted }}</span>
+                        {% endif %}
                         <span><strong>Self Time:</strong> {{ call_pair.total_self_time_formatted }}</span>
                         <span><strong>Unique Endpoints:</strong> {{ call_pair.calls|length }}</span>
                     </div>
@@ -330,7 +352,7 @@
                                     <th>Normalized Endpoint</th>
                                     <th>Parameter Value</th>
                                     <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span>
+                                    <th class="sortable" data-sort="time">Time <span class="sort-icon"></span>
                                     </th>
                                     <th class="sortable" data-sort="time">Self Time <span class="sort-icon"></span></th>
                                 </tr>
@@ -348,7 +370,14 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ call.count }}</td>
-                                    <td class="time-cell">{{ call.total_time_formatted }}</td>
+                                    <td class="time-cell">
+                                        {% if call.has_parallelism %}
+                                        <span class="effective-time-primary">⚡ {{ call.effective_time_formatted }}</span>
+                                        <span class="cumulative-time-secondary">Σ {{ call.total_time_formatted }} ({{ "%.1f"|format(call.parallelism_factor) }}×)</span>
+                                        {% else %}
+                                        {{ call.total_time_formatted }}
+                                        {% endif %}
+                                    </td>
                                     <td class="time-cell">{{ call.total_self_time_formatted }}</td>
                                 </tr>
                                 {% endfor %}
@@ -372,7 +401,11 @@
                     <h3>{{ kafka_service.service }}</h3>
                     <div class="service-stats">
                         <span><strong>Total Operations:</strong> {{ kafka_service.total_operations }}</span>
-                        <span><strong>Total Time:</strong> {{ kafka_service.total_time_formatted }}</span>
+                        {% if kafka_service.has_parallelism %}
+                        <span><strong>Time:</strong> <span class="effective-time-primary">⚡ {{ kafka_service.effective_time_formatted }}</span> <span class="cumulative-time-secondary">Σ {{ kafka_service.total_time_formatted }}</span></span>
+                        {% else %}
+                        <span><strong>Time:</strong> {{ kafka_service.total_time_formatted }}</span>
+                        {% endif %}
                         <span><strong>Unique Operations:</strong> {{ kafka_service.operations|length }}</span>
                     </div>
 
@@ -384,7 +417,7 @@
                                     <th>Message/Span Name</th>
                                     <th>Details</th>
                                     <th class="sortable" data-sort="number">Count <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-sort="time">Total Time <span class="sort-icon"></span>
+                                    <th class="sortable" data-sort="time">Time <span class="sort-icon"></span>
                                     </th>
                                 </tr>
                             </thead>
@@ -401,7 +434,14 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ operation.count }}</td>
-                                    <td class="time-cell">{{ operation.total_time_formatted }}</td>
+                                    <td class="time-cell">
+                                        {% if operation.has_parallelism %}
+                                        <span class="effective-time-primary">⚡ {{ operation.effective_time_formatted }}</span>
+                                        <span class="cumulative-time-secondary">Σ {{ operation.total_time_formatted }} ({{ "%.1f"|format(operation.parallelism_factor) }}×)</span>
+                                        {% else %}
+                                        {{ operation.total_time_formatted }}
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

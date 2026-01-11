@@ -17,6 +17,7 @@
 - `endpoint_params`: Flat dict of incoming requests per service
 - `service_calls`: Flat dict of service-to-service calls
 - `kafka_messages`: Flat dict of Kafka operations
+- `effective_times`: Dict with categories `endpoints`, `service_calls`, `kafka`, `services` → effective wall-clock time after merging overlapping intervals
 
 **Five-Pass Analysis Pipeline**:
 1. **Ingest & Group** - Read file, group spans by traceId
@@ -30,6 +31,10 @@
 - `normalize_path()` - URL normalization with regex patterns
 - `extract_http_path()`, `extract_http_method()`, `extract_service_name()` - Attribute extraction
 - `format_time()` - Human-readable time formatting
+
+**Formatters Module** (`trace_analyzer/formatters/`):
+- `time_formatter.py` - Human-readable time formatting
+- `interval_merger.py` - Merges overlapping time intervals for effective time calculation
 
 ### 2. `app.py` - Flask Web Application
 **Routes**:

@@ -75,6 +75,14 @@ class TraceAnalyzer:
         self.trace_hierarchies = {}
         self.trace_summary = {}
         
+        # Effective times for parallelism-aware metrics
+        self.effective_times = {
+            'endpoints': {},
+            'service_calls': {},
+            'kafka': {},
+            'services': {}
+        }
+        
         # Initialize components
         self.http_extractor = HttpExtractor()
         self.kafka_extractor = KafkaExtractor()
@@ -141,7 +149,7 @@ class TraceAnalyzer:
                 self.timing_calculator.calculate_hierarchy_timings(raw_hierarchy)
             
             # Pass 4: Populate the flat summary tables
-            ep, sc, km = self.metrics_populator.populate_flat_metrics(span_nodes)
+            ep, sc, km, eff = self.metrics_populator.populate_flat_metrics(span_nodes)
             
             # Merge results into analyzer's collections
             for key, stats in ep.items():
@@ -166,6 +174,16 @@ class TraceAnalyzer:
                 self.kafka_messages[key]['error_count'] += stats['error_count']
                 for msg, count in stats['error_messages'].items():
                     self.kafka_messages[key]['error_messages'][msg] += count
+            
+            # Merge effective times (for multi-trace analysis, we need to merge intervals)
+            # For now, we take the max effective time per key across traces
+            for category in ['endpoints', 'service_calls', 'kafka', 'services']:
+                for key, eff_time in eff.get(category, {}).items():
+                    if key not in self.effective_times[category]:
+                        self.effective_times[category][key] = eff_time
+                    else:
+                        # For multi-trace, sum the effective times (they don't overlap across traces)
+                        self.effective_times[category][key] += eff_time
             
             # Pass 5: Normalize and aggregate the raw hierarchy
             normalized_hierarchy = self.hierarchy_normalizer.normalize_and_aggregate_hierarchy(raw_hierarchy)

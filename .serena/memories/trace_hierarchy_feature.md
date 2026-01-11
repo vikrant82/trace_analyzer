@@ -199,7 +199,20 @@ The Trace Hierarchy now detects and displays parallel execution patterns, showin
 - `.cumulative-time-secondary`: Gray badge for cumulative time
 
 ### Sibling Parallelism (Updated January 2026)
-Sibling parallelism detection (`∥` markers) is now **ROOT-LEVEL ONLY** to prevent false positives from sequential parent calls where aggregated child timestamps overlap.
+Sibling parallelism detection (`∥` markers) runs when:
+1. Root level (direct children of trace root), OR
+2. Parent is NOT aggregated (count=1)
+
+This avoids false positives from sequential aggregated calls where children's timestamps overlap.
+
+Only children that **actually overlap** with at least one other sibling get the `∥` marker (pairwise overlap check).
+
+### Timeline Visualization
+Each child shows a dual-layer timeline bar:
+- **Light span**: Temporal range (when calls happened)
+- **Solid fill**: Work density (effective_time / span_duration)
+
+CSS classes: `.timeline-bar-fullwidth`, `.timeline-bar-span`, `.timeline-bar-work`
 
 ### Example
 ```
