@@ -52,3 +52,7 @@ temp/
 
 .kilocode/mcp.json
 .roo/mcp.json
+
+# Share storage (keep .gitkeep but ignore share files)
+shares/*.json
+!shares/.gitkeep

@@ -4,7 +4,7 @@ Flask Web Application for Trace Endpoint Analyzer
 Provides both a web UI and REST API endpoints for analyzing HTTP and Kafka trace operations.
 """
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, url_for
 from werkzeug.utils import secure_filename
 import os
 import tempfile
@@ -13,6 +13,7 @@ import logging
 import time
 from trace_analyzer import TraceAnalyzer
 from trace_analyzer.web import prepare_results
+from trace_analyzer.storage import ShareStorage, TTL_OPTIONS
 from collections import defaultdict
 
 # Configure logger
@@ -25,6 +26,9 @@ if not logger.handlers:
         datefmt='%Y-%m-%d %H:%M:%S'
     ))
     logger.addHandler(handler)
+
+# Initialize share storage
+share_storage = ShareStorage(os.environ.get('SHARE_STORAGE_DIR', 'shares'))
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
@@ -305,9 +309,132 @@ def analyze_web():
         return render_template('index.html', sample_traces=SAMPLE_TRACES, error=f'Error analyzing file: {str(e)}')
 
 
+# ============================================================================
+# Share Endpoints
+# ============================================================================
+
+@app.route('/api/share', methods=['POST'])
+def create_share():
+    """
+    Create a shareable link for analysis results.
+    
+    Accepts: JSON with fields:
+      - 'results': The analysis results object
+      - 'filename': Original filename that was analyzed
+      - 'ttl': TTL option ('24h', '7d', or '1m')
+      
+    Returns: JSON with share_id and share_url
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+        
+        results = data.get('results')
+        filename = data.get('filename', 'unknown')
+        ttl = data.get('ttl', '24h')
+        
+        if not results:
+            return jsonify({'error': 'No results provided'}), 400
+        
+        if ttl not in TTL_OPTIONS:
+            return jsonify({'error': f"Invalid TTL. Must be one of: {list(TTL_OPTIONS.keys())}"}), 400
+        
+        share_id, share_data = share_storage.create_share(results, filename, ttl)
+        
+        logger.info(
+            f"SHARE_CREATED | share_id={share_id} | file={filename} | "
+            f"ttl={ttl} | expires_at={share_data.expires_at}"
+        )
+        
+        return jsonify({
+            'share_id': share_id,
+            'share_url': url_for('view_share', share_id=share_id, _external=True),
+            'expires_at': share_data.expires_at,
+            'ttl_label': ttl,
+        })
+        
+    except Exception as e:
+        logger.error(f"SHARE_FAILED | error={type(e).__name__}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/s/<share_id>')
+def view_share(share_id: str):
+    """
+    View a shared analysis result.
+    
+    Args:
+        share_id: The share ID from the URL
+        
+    Returns:
+        HTML results page or error page
+    """
+    share_data = share_storage.get_share(share_id)
+    
+    if not share_data:
+        logger.info(f"SHARE_NOT_FOUND | share_id={share_id}")
+        return render_template('index.html', 
+                             sample_traces=SAMPLE_TRACES,
+                             error='Share not found or has expired'), 404
+    
+    logger.info(f"SHARE_VIEWED | share_id={share_id} | file={share_data.filename}")
+    
+    return render_template('results.html',
+                         filename=f"{share_data.filename} (Shared)",
+                         results=share_data.results,
+                         is_shared=True,
+                         share_id=share_id,
+                         expires_at=share_data.expires_at)
+
+
+@app.route('/api/share/<share_id>')
+def get_share_api(share_id: str):
+    """
+    Get shared analysis results as JSON.
+    
+    Args:
+        share_id: The share ID
+        
+    Returns:
+        JSON with share metadata and results
+    """
+    share_data = share_storage.get_share(share_id)
+    
+    if not share_data:
+        return jsonify({'error': 'Share not found or has expired'}), 404
+    
+    return jsonify({
+        'share_id': share_data.share_id,
+        'filename': share_data.filename,
+        'created_at': share_data.created_at,
+        'expires_at': share_data.expires_at,
+        'ttl_label': share_data.ttl_label,
+        'results': share_data.results,
+    })
+
+
+@app.route('/api/ttl-options')
+def get_ttl_options():
+    """Get available TTL options for sharing."""
+    return jsonify({
+        'options': [
+            {'value': '24h', 'label': '24 Hours', 'seconds': TTL_OPTIONS['24h']},
+            {'value': '7d', 'label': '7 Days', 'seconds': TTL_OPTIONS['7d']},
+            {'value': '1m', 'label': '1 Month', 'seconds': TTL_OPTIONS['1m']},
+        ]
+    })
+
+
 if __name__ == '__main__':
     os.makedirs('templates', exist_ok=True)
     os.makedirs('static', exist_ok=True)
+    
+    # Cleanup expired shares on startup
+    deleted_count = share_storage.cleanup_expired()
+    if deleted_count > 0:
+        logger.info(f"CLEANUP_EXPIRED | deleted={deleted_count} shares")
     
     app.run(debug=True, host='0.0.0.0', port=5001)
 

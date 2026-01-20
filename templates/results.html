@@ -122,8 +122,51 @@
         <header>
             <h1>📊 Analysis Results</h1>
             <p class="subtitle">{{ filename }}</p>
-            <a href="/" class="btn btn-secondary">← Analyze Another File</a>
+            <div class="header-actions">
+                <a href="/" class="btn btn-secondary">← Analyze Another File</a>
+                {% if not is_shared %}
+                <button id="shareBtn" class="btn btn-primary" onclick="openShareModal()">
+                    🔗 Share
+                </button>
+                {% else %}
+                <span class="shared-badge" title="Expires: {{ expires_at }}">
+                    📤 Shared Link
+                </span>
+                {% endif %}
+            </div>
         </header>
+
+        <!-- Share Modal -->
+        <div id="shareModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>🔗 Share Analysis</h3>
+                    <button class="modal-close" onclick="closeShareModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="shareForm">
+                        <label for="ttlSelect">Link expires after:</label>
+                        <select id="ttlSelect" class="form-select">
+                            <option value="24h">24 Hours</option>
+                            <option value="7d" selected>7 Days</option>
+                            <option value="1m">1 Month</option>
+                        </select>
+                        <button id="generateShareBtn" class="btn btn-primary" onclick="generateShareLink()">
+                            Generate Link
+                        </button>
+                    </div>
+                    <div id="shareResult" style="display: none;">
+                        <p class="share-success">✅ Share link created!</p>
+                        <div class="share-url-container">
+                            <input type="text" id="shareUrl" class="share-url-input" readonly>
+                            <button class="btn btn-secondary" onclick="copyShareUrl()">📋 Copy</button>
+                        </div>
+                        <p class="share-expiry" id="shareExpiry"></p>
+                    </div>
+                    <div id="shareError" class="share-error" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
 
         <main>
             <!-- Summary Section -->
@@ -787,6 +830,89 @@
 
             return ms;
         }
+
+        // ============================================================================
+        // Share Functionality
+        // ============================================================================
+        
+        // Store results data for sharing
+        const analysisResults = {{ results | tojson | safe }};
+        const analysisFilename = {{ filename | tojson | safe }};
+
+        function openShareModal() {
+            document.getElementById('shareModal').style.display = 'flex';
+            document.getElementById('shareForm').style.display = 'block';
+            document.getElementById('shareResult').style.display = 'none';
+            document.getElementById('shareError').style.display = 'none';
+        }
+
+        function closeShareModal() {
+            document.getElementById('shareModal').style.display = 'none';
+        }
+
+        async function generateShareLink() {
+            const ttl = document.getElementById('ttlSelect').value;
+            const btn = document.getElementById('generateShareBtn');
+            
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            
+            try {
+                const response = await fetch('/api/share', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        results: analysisResults,
+                        filename: analysisFilename,
+                        ttl: ttl
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to create share');
+                }
+                
+                // Show success
+                document.getElementById('shareForm').style.display = 'none';
+                document.getElementById('shareResult').style.display = 'block';
+                document.getElementById('shareUrl').value = data.share_url;
+                
+                // Format expiry date
+                const expiryDate = new Date(data.expires_at * 1000);
+                document.getElementById('shareExpiry').textContent = 
+                    `Expires: ${expiryDate.toLocaleDateString()} ${expiryDate.toLocaleTimeString()}`;
+                
+            } catch (error) {
+                document.getElementById('shareError').textContent = error.message;
+                document.getElementById('shareError').style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Link';
+            }
+        }
+
+        function copyShareUrl() {
+            const urlInput = document.getElementById('shareUrl');
+            urlInput.select();
+            document.execCommand('copy');
+            
+            // Show feedback
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ Copied!';
+            setTimeout(() => btn.textContent = originalText, 2000);
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('shareModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeShareModal();
+            }
+        });
     </script>
 </body>
 

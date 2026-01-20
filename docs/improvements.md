@@ -36,6 +36,23 @@ The following features have been successfully implemented:
 - Accurate timing calculations after tree modifications
 - Proper aggregation matching flat table metrics
 
+### Shareable Analysis Links (January 2026)
+- **Opt-in sharing** - Users can generate shareable links for analysis results
+- **Configurable TTL** - Three expiration options: 24 Hours, 7 Days, 1 Month
+- **Short URLs** - 8-character alphanumeric share codes (e.g., `/s/abc12def`)
+- **Privacy-first design**:
+  - Only processed results stored (never original trace files)
+  - Automatic cleanup of expired shares
+  - No authentication required (use judiciously)
+- **REST API support** - Create and retrieve shares programmatically
+- **File-based storage** - Simple JSON files in `shares/` directory
+
+### Request Logging (January 2026)
+- **Structured logging** with pipe-delimited format for easy parsing
+- **Request lifecycle tracking**: start, end, and error events
+- **Rich metadata**: file size, duration, trace/span/service/endpoint counts
+- **Configurable log level** via `TRACE_ANALYZER_LOG_LEVEL` environment variable
+
 ---
 
 ## 1. Core Engine Enhancements (`analyze_trace.py`)

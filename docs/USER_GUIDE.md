@@ -1,6 +1,6 @@
 # Trace Analyzer User Guide
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 20, 2026
 
 This guide covers how to use the Trace Analyzer for analyzing OpenTelemetry traces.
 
@@ -11,6 +11,7 @@ This guide covers how to use the Trace Analyzer for analyzing OpenTelemetry trac
 - [Web Application](#web-application)
 - [Command Line Interface](#command-line-interface)
 - [REST API](#rest-api)
+- [Sharing Analysis Results](#sharing-analysis-results)
 - [Filtering Options](#filtering-options)
 - [Parameter Detection](#parameter-detection)
 - [Query Parameter Handling](#query-parameter-handling)
@@ -126,6 +127,83 @@ curl -X POST http://localhost:5001/api/analyze \
   "trace_hierarchies": [ ... ]
 }
 ```
+
+---
+
+## Sharing Analysis Results
+
+Share your analysis results with teammates using shareable links with configurable expiration.
+
+### How to Share
+
+1. **Analyze** your trace file through the web interface
+2. **Click** the "🔗 Share" button in the results header
+3. **Select** expiration time (24 hours, 7 days, or 1 month)
+4. **Copy** the generated short URL
+
+### Expiration Options
+
+| Option | Duration | Use Case |
+|--------|----------|----------|
+| **24 Hours** | 1 day | Quick reviews, daily standups |
+| **7 Days** | 1 week | Sprint analysis, incident reviews |
+| **1 Month** | 30 days | Documentation, long-term reference |
+
+### Shared Link Format
+
+```
+https://your-domain.com/s/abc12def
+```
+
+- 8-character short code
+- Full analysis results (including trace hierarchy)
+- Read-only view for recipients
+
+### Privacy Considerations
+
+- **Opt-in only**: Sharing is never automatic
+- **Processed results only**: Original trace file is not stored
+- **Auto-cleanup**: Expired shares are automatically deleted
+- **No authentication**: Anyone with the link can view (use judiciously)
+
+### Share API
+
+Create shares programmatically:
+
+```bash
+# Create a share
+curl -X POST http://localhost:5001/api/share \
+  -H "Content-Type: application/json" \
+  -d '{
+    "results": {...},
+    "filename": "trace.json",
+    "ttl": "7d"
+  }'
+
+# Response
+{
+  "share_id": "abc12def",
+  "share_url": "http://localhost:5001/s/abc12def",
+  "expires_at": 1738000000,
+  "ttl_label": "7d"
+}
+```
+
+Retrieve a share:
+
+```bash
+# Get share as JSON
+curl http://localhost:5001/api/share/abc12def
+
+# View share in browser
+open http://localhost:5001/s/abc12def
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SHARE_STORAGE_DIR` | `shares/` | Directory for share files |
 
 ---
 

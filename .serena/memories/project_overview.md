@@ -32,6 +32,7 @@ Trace Analyzer is a powerful OpenTelemetry trace analysis tool that processes tr
 - Kafka/messaging operations tracking
 - Accurate timing calculations (Total Time + Self Time per endpoint)
 - Error tracking with counts and messages
+- Shareable analysis links with configurable TTL (24h, 7d, 1m)
 
 ## Project Structure (Modular Architecture)
 
@@ -67,6 +68,9 @@ Trace Analyzer is a powerful OpenTelemetry trace analysis tool that processes tr
 #### Web (`trace_analyzer/web/`)
 - `result_builder.py` - Builds web response data structures
 
+#### Storage (`trace_analyzer/storage/`)
+- `share_storage.py` - File-based storage for shared analysis results (87% coverage)
+
 ### Supporting Files
 ```
 templates/           # Jinja2 HTML templates
@@ -99,6 +103,6 @@ tests/
 - **Before**: 1,033-line monolithic analyze_trace.py
 - **After**: 14 modular files across 6 subdirectories
 - **Backward Compatibility**: Original CLI and web interfaces unchanged
-- **Test Coverage**: 73% with comprehensive test suite
+- **Test Coverage**: 79% with comprehensive test suite (145 tests)
 - **Lines of Code**: analyze_trace.py: 1,033 → 59 lines
 

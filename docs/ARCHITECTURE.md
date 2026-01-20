@@ -6,11 +6,12 @@ The Trace Analyzer is a web-based utility designed to parse and analyze OpenTele
 
 ## 2. Core Architecture
 
-The application is composed of three main components:
+The application is composed of four main components:
 
-1.  **`analyze_trace.py` (The Backend Engine):** This is the heart of the application. The `TraceAnalyzer` class is responsible for all the heavy lifting, including parsing the trace file, building the trace hierarchy, and calculating all the timing metrics.
-2.  **`app.py` (The Web Application):** This is a lightweight Flask application that serves the web UI and provides an API for analyzing trace files. It handles file uploads, orchestrates the analysis process by calling the `TraceAnalyzer`, and prepares the data for rendering in the frontend.
-3.  **`templates/` (The Frontend):** This directory contains the Jinja2 HTML templates that define the structure and appearance of the web UI. The `results.html` template is the most important, as it dynamically renders the analysis results, including the interactive trace hierarchy.
+1.  **`trace_analyzer/` (The Backend Engine):** This package contains the core analysis logic, organized into extractors, processors, formatters, filters, storage, and web modules.
+2.  **`app.py` (The Web Application):** A lightweight Flask application that serves the web UI and provides REST API endpoints for analyzing and sharing trace files.
+3.  **`analyze_trace.py` (CLI Interface):** Command-line interface for scripted analysis.
+4.  **`templates/` (The Frontend):** Jinja2 HTML templates that define the structure and appearance of the web UI.
 
 ## 3. The Backend Engine: `analyze_trace.py`
 
@@ -62,3 +63,53 @@ The results page is a dynamic HTML document that is rendered by Jinja2. It is re
 *   **Dynamic Styling:** The CSS is designed to visually distinguish between different types of information. For example, the `http-method` has its own style, and the `collapsible` and `expanded`/`collapsed` states are handled with simple CSS rules.
 
 This architecture allows for a clean separation of concerns, with the backend handling the complex analysis and the frontend focusing on providing a clear and interactive user experience.
+
+## 6. Share Storage: `trace_analyzer/storage/`
+
+The storage module provides file-based persistence for shared analysis results.
+
+### ShareStorage Class
+
+The `ShareStorage` class manages the lifecycle of shared analyses:
+
+*   **`create_share(results, filename, ttl)`:** Generates a unique 8-character ID and saves the analysis results as a JSON file with expiration metadata.
+*   **`get_share(share_id)`:** Retrieves a share by ID, automatically deleting and returning `None` if expired.
+*   **`cleanup_expired()`:** Removes all expired share files (called on server startup).
+
+### Storage Format
+
+Shares are stored as JSON files in the `shares/` directory:
+
+```
+shares/
+├── abc12def.json    # Share with 8-char ID
+├── xyz98765.json
+└── .gitkeep
+```
+
+Each file contains:
+
+```json
+{
+  "share_id": "abc12def",
+  "created_at": 1737388800,
+  "expires_at": 1737993600,
+  "ttl_label": "7d",
+  "filename": "production-trace.json",
+  "results": { /* Full analysis results */ }
+}
+```
+
+### TTL Options
+
+| Label | Duration | Seconds |
+|-------|----------|---------|
+| `24h` | 24 Hours | 86,400 |
+| `7d` | 7 Days | 604,800 |
+| `1m` | 1 Month | 2,592,000 |
+
+### Privacy Model
+
+*   Only processed results are stored (never the original trace file)
+*   Sharing is opt-in only (user must explicitly click "Share")
+*   Expired files are automatically cleaned up
