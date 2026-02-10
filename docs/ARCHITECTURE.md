@@ -41,7 +41,7 @@ The analysis is performed in a sophisticated four-pass system within the `_proce
 
 ### Recursive Aggregation
 
-*   **`_aggregate_list_of_nodes(nodes)`:** This helper function is responsible for grouping nodes that represent identical calls. It uses a composite key (service, method, and normalized path) to ensure that only truly identical operations are merged. When nodes are merged, their `count` is summed, and a new `avg_time_ms` is calculated. This is what provides the clean, aggregated view in the final hierarchy display.
+*   **`_aggregate_list_of_nodes(nodes)`:** This helper function is responsible for grouping nodes that represent identical calls. It uses a composite key (service, method, and normalized path) to ensure that only truly identical operations are merged. Fuzzy path matching allows raw URL paths (from proxy/sidecar CLIENT spans) to merge with pre-parameterized framework routes (from SERVER spans using `http.route`). When nodes are merged, their `count` is summed, a new `avg_time_ms` is calculated, and absorbed concrete values (e.g., `data-model`, `4.3.8`) are tracked as parameter values. This is what provides the clean, aggregated view in the final hierarchy display.
 
 ## 4. The Web Application: `app.py`
 

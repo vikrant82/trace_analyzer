@@ -146,11 +146,28 @@ if attr.get('key') == 'http.status_code':
     http_status_code = attr.get('value', {}).get('intValue') or attr.get('value', {}).get('stringValue')
 ```
 
+## Tooltip Implementation (Updated Jan 2026)
+
+### Design Decision: Tooltip on Error Badge Only
+The error detail tooltip was moved from `<li class="error-span">` to `.metric.error-badge`:
+- **Why**: The `<li>` is a huge hover target (entire subtree container). CSS `:hover` bubbles to all ancestors, causing stacking tooltips from nested error spans. Also conflicts with native `title` tooltips on timeline bars inside the same `<li>`.
+- **How**: `data-error-message` attribute on `.error-badge` span + CSS `::after` pseudo-element
+- **CSS Selector**: `.metric.error-badge[data-error-message]:hover::after`
+- **Key properties**: `pointer-events: none` on the tooltip itself to prevent hover interference
+
+### Previous Approach (Failed)
+- Tooltip on `<li>` with `:not(:has(li.error-span:hover))` — only fixed parent/child `<li>` stacking but NOT the conflict with native `title` tooltips on timeline bars
+
+### `title` Attributes Removed
+- Removed `title` from `.error-indicator` (🔴 dot)
+- Removed `title` from `.error-badge` span
+- These caused double-tooltips (native browser + CSS `::after`)
+
 ## Testing Checklist
 
 - ✅ Single error spans display red dot and error badge with HTTP status
 - ✅ Aggregated error spans display error count ratio (e.g., 4/4)
-- ✅ Hover tooltips show full error messages
+- ✅ Hover tooltips show full error messages (on error badge only, no stacking)
 - ✅ Pulsing animation on red dot indicator
 - ✅ Combined error + performance highlighting works (red + time borders)
 - ✅ Error Summary section correlates with Trace Hierarchy indicators

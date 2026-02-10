@@ -30,7 +30,7 @@
                 {% endif %}
                 <span class="node-prefix">{{ loop_index }}.</span>
                 {% if node.is_error %}
-                <span class="error-indicator" title="Error: {{ node.error_message }}">🔴</span>
+                <span class="error-indicator">🔴</span>
                 {% endif %}
                 <span class="node-service">{{ node.service_name }}</span>
                 <span class="node-arrow">→</span>
@@ -43,7 +43,7 @@
                 {% endif %}
 
                 {% if node.is_error %}
-                <span class="metric error-badge" title="{{ node.error_message }}">
+                <span class="metric error-badge" data-error-message="{{ node.error_message }}">
                     <strong>❌ Error{% if node.aggregated and node.error_count %} ({{ node.error_count }}/{{ node.count
                         }}){% elif node.http_status_code %} ({{ node.http_status_code }}){% endif %}</strong>
                 </span>

@@ -13,16 +13,20 @@ tests/
 │   ├── test_time_formatter.py       # 9 tests - 100% passing
 │   ├── test_http_extractor.py       # 14 tests - 71% passing
 │   ├── test_kafka_extractor.py      # 7 tests - needs API fixes
-│   ├── test_path_normalizer.py      # 12 tests - 58% passing
-│   └── test_service_mesh_filter.py  # 11 tests - needs parameter fixes
+│   ├── test_path_normalizer.py       # 15 tests - semver, UUID, numeric, encoded
+│   ├── test_service_mesh_filter.py  # 11 tests
+│   ├── test_sibling_parallelism.py  # parallelism detection tests
+│   ├── test_timing_calculator.py    # timing calculation tests
+│   ├── test_share_storage.py        # share storage tests
+│   └── test_fuzzy_path_matching.py  # 11 tests - fuzzy matching helpers (NEW)
 └── integration/             # End-to-end tests (7 tests)
     └── test_analyzer_integration.py # 7 tests - 100% passing
 ```
 
 ## Test Statistics
-- **Total:** 59 tests
-- **Passing:** 34 (58%)
-- **Integration:** 7/7 (100% passing) ✅
+- **Total:** 162 tests (all passing)
+- **Unit:** ~155 tests across 11 files
+- **Integration:** 7 tests (100% passing) ✅
 - **Code Coverage:** 73% overall (improved from 77% with better test execution)
 - **High Coverage Modules:** Core (100%), Normalizer (96%), Timing (94%), File Processor (91%)
 

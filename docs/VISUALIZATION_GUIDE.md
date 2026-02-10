@@ -161,8 +161,6 @@ BasicRuleLookup (×73): Effective 3333ms across 3400ms span
 
 **Meaning:** This span has an error status (OpenTelemetry status code 1 or 2)
 
-**Tooltip:** Shows the error message
-
 ### ❌ Error Badge
 
 **Visual:** Red badge with error details
@@ -173,7 +171,7 @@ BasicRuleLookup (×73): Effective 3333ms across 3400ms span
 - Single span: `❌ Error (502)` - Shows HTTP status code
 - Aggregated: `❌ Error (4/73)` - Shows error count / total count
 
-**Tooltip:** Full error message
+**Tooltip:** Hover over the error badge to see the full error message
 
 ### Error Span Background
 

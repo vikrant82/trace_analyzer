@@ -257,6 +257,7 @@ The analyzer automatically detects and normalizes URL parameters:
 | UUID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` | `{uuid}` | ❌ Ignored |
 | Rule ID | `AppName__ResourceName` | `{rule_id}` | ✅ Yes |
 | Encoded | Base64-like (30+ chars) | `{encoded_id}` | ✅ Yes |
+| Semver | `4.3.8`, `1.0.0.1` | `{version}` | ✅ Yes |
 | Numeric | `/123`, `/456` | `{id}` | ✅ Yes |
 
 ### Example
@@ -272,7 +273,17 @@ Tracked: {id} = 123 (UUID ignored)
 1. UUIDs (ignored)
 2. Rule IDs (tracked)
 3. Long encoded strings (tracked)
-4. Numeric IDs (tracked)
+4. Semantic versions (tracked)
+5. Numeric IDs (tracked)
+
+### Fuzzy Path Matching
+
+When your system uses a framework like Micronaut that provides pre-parameterized route templates (via `http.route`), the analyzer will merge those with raw URL paths from proxy/sidecar spans. For example:
+
+- **SERVER span** (`http.route`): `/v1/{isolationID}/bundles/{bundleID}/versions/{versionID}`
+- **CLIENT span** (`http.url`): `/v1/abc123/bundles/data-model/versions/4.3.8`
+
+These are recognized as the same endpoint and merged, with concrete values like `data-model` and `4.3.8` shown as parameter values in the display.
 
 ---
 

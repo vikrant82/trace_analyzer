@@ -5,6 +5,88 @@ Metrics populator for flat summary tables.
 from typing import Dict
 from collections import defaultdict
 from ..formatters.interval_merger import calculate_effective_times
+from .normalizer import (
+    _normalize_path_for_matching,
+    _paths_match_fuzzy,
+    _extract_absorbed_values,
+)
+
+
+def _merge_fuzzy_metrics(metrics_dict, intervals_dict, path_index):
+    """Merge flat-table entries whose paths are fuzzy-equal.
+    
+    Groups keys that share every element except the path (at *path_index*),
+    where the paths are fuzzy-equal after placeholder unification.
+    The most-parameterized original path is kept for display.
+    Concrete values absorbed by the merge are added to the param field.
+    
+    Returns new (merged_metrics, merged_intervals) dicts.
+    """
+    param_index = path_index + 1  # param_str is always right after path in key tuples
+    
+    context_groups = defaultdict(list)
+    for key in metrics_dict:
+        # Group by all fields except path and param (both can change during merge)
+        context = key[:path_index] + key[param_index + 1:]
+        original_path = key[path_index]
+        original_param = key[param_index]
+        match_path = _normalize_path_for_matching(original_path)
+        context_groups[context].append((key, match_path, original_path, original_param))
+
+    merged_metrics = defaultdict(lambda: {
+        'count': 0, 'total_time_ms': 0.0, 'total_self_time_ms': 0.0,
+        'error_count': 0, 'error_messages': defaultdict(int),
+    })
+    merged_intervals = defaultdict(list)
+
+    for context, entries in context_groups.items():
+        entries.sort(key=lambda e: -e[1].count('{param}'))
+        buckets = []  # [(canonical_match, best_original, [keys], [original_paths], base_param)]
+
+        for full_key, match_path, original_path, original_param in entries:
+            placed = False
+            for bucket in buckets:
+                if _paths_match_fuzzy(match_path, bucket[0]) and \
+                   (original_param == bucket[4] or
+                    original_param == '[no-params]' or bucket[4] == '[no-params]'):
+                    bucket[2].append(full_key)
+                    bucket[3].append(original_path)
+                    if _normalize_path_for_matching(original_path).count('{param}') > \
+                       _normalize_path_for_matching(bucket[1]).count('{param}'):
+                        bucket[1] = original_path
+                    placed = True
+                    break
+            if not placed:
+                buckets.append([match_path, original_path, [full_key], [original_path], original_param])
+
+        for canonical_match, best_original, keys, all_originals, base_param in buckets:
+            # Collect concrete values absorbed by the merge
+            absorbed = set()
+            for orig in all_originals:
+                for val in _extract_absorbed_values(orig, best_original):
+                    absorbed.add(val)
+            
+            # Collect ALL param values from merged keys so nothing is lost
+            all_params = set()
+            for k in keys:
+                p = k[param_index] if len(k) > param_index else ''
+                if p and p != '[no-params]':
+                    all_params.update(v.strip() for v in p.split(',') if v.strip())
+            all_params.update(absorbed)
+            new_param = ', '.join(sorted(all_params)) if all_params else base_param
+            
+            new_key = keys[0][:path_index] + (best_original, new_param) + keys[0][param_index + 1:]
+            for old_key in keys:
+                old = metrics_dict[old_key]
+                merged_metrics[new_key]['count'] += old['count']
+                merged_metrics[new_key]['total_time_ms'] += old['total_time_ms']
+                merged_metrics[new_key]['total_self_time_ms'] += old.get('total_self_time_ms', 0.0)
+                merged_metrics[new_key]['error_count'] += old.get('error_count', 0)
+                for msg, cnt in old.get('error_messages', {}).items():
+                    merged_metrics[new_key]['error_messages'][msg] += cnt
+                merged_intervals[new_key].extend(intervals_dict.get(old_key, []))
+
+    return merged_metrics, merged_intervals
 
 
 class MetricsPopulator:
@@ -202,5 +284,18 @@ class MetricsPopulator:
         }
         # Flatten services dict to use service name as key instead of tuple
         effective_times['services'] = {k[0]: v for k, v in effective_times['services'].items()}
+        
+        # Merge entries that represent the same endpoint but have different placeholder
+        # names (e.g., {uuid} vs {isolationID}) or un-normalized text slugs vs {param}
+        endpoint_params, endpoint_intervals = _merge_fuzzy_metrics(
+            endpoint_params, endpoint_intervals, path_index=2
+        )
+        service_calls, service_call_intervals = _merge_fuzzy_metrics(
+            service_calls, service_call_intervals, path_index=3
+        )
+        
+        # Recalculate effective times after merging
+        effective_times['endpoints'] = calculate_effective_times(endpoint_intervals)
+        effective_times['service_calls'] = calculate_effective_times(service_call_intervals)
         
         return endpoint_params, service_calls, kafka_messages, effective_times

@@ -21,6 +21,7 @@ class PathNormalizer:
             r'/[A-Z][A-Za-z0-9-]*__[A-Za-z0-9_]+(?=/|\?|$)'
         )
         self.long_encoded_pattern = re.compile(r'/[A-Za-z0-9_-]{30,}(?=/|\?|$)')
+        self.semver_pattern = re.compile(r'/\d+\.\d+\.\d+(?:\.\d+)?(?=/|\?|$)')
     
     def normalize_path(self, path: str, strip_query_params: bool = True) -> Tuple[str, List[str]]:
         """
@@ -85,6 +86,13 @@ class PathNormalizer:
             if not is_already_matched:
                 non_uuid_params.append(param_value)
                 normalized = normalized.replace(match.group(0), '/{encoded_id}', 1)
+        
+        # Replace semantic version strings (e.g., 4.3.8, 1.0.0.1) with {version}
+        for match in self.semver_pattern.finditer(path):
+            param_value = match.group(0)[1:]  # Remove leading slash
+            if param_value not in non_uuid_params:
+                non_uuid_params.append(param_value)
+                normalized = normalized.replace(match.group(0), '/{version}', 1)
         
         # Replace numeric IDs with {id}
         for match in self.numeric_id_pattern.finditer(path):

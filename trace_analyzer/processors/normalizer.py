@@ -2,7 +2,59 @@
 Hierarchy normalizer for display aggregation.
 """
 
+import re
 from typing import Dict, List, Optional
+
+_PLACEHOLDER_RE = re.compile(r'\{[^}]+\}')
+
+
+def _normalize_path_for_matching(path: str) -> str:
+    """Replace all {paramName} placeholders with {param} for aggregation matching."""
+    return _PLACEHOLDER_RE.sub('{param}', path)
+
+
+def _paths_match_fuzzy(path_a: str, path_b: str) -> bool:
+    """Check if two normalized paths represent the same endpoint.
+    
+    Paths match when they have the same number of segments and each
+    corresponding segment either matches exactly or at least one is {param}.
+    This allows raw-URL paths (with un-normalized slugs) to merge with
+    pre-parameterized http.route paths.
+    """
+    segments_a = path_a.split('/')
+    segments_b = path_b.split('/')
+    if len(segments_a) != len(segments_b):
+        return False
+    for sa, sb in zip(segments_a, segments_b):
+        if sa == sb:
+            continue
+        if sa == '{param}' or sb == '{param}':
+            continue
+        return False
+    return True
+
+
+def _pick_canonical_path(path_a: str, path_b: str) -> str:
+    """Return the more parameterized form (more {param} segments)."""
+    return path_a if path_a.count('{param}') >= path_b.count('{param}') else path_b
+
+
+def _extract_absorbed_values(source_path: str, display_path: str) -> List[str]:
+    """Extract concrete values from source that correspond to {placeholder} in display.
+
+    When a raw URL path is merged with a pre-parameterized http.route path,
+    concrete segments (e.g. "data-model") that became placeholders (e.g. {bundleID})
+    are returned as descriptive strings.
+    """
+    s_segs = source_path.split('/')
+    d_segs = display_path.split('/')
+    if len(s_segs) != len(d_segs):
+        return []
+    result = []
+    for ss, ds in zip(s_segs, d_segs):
+        if _PLACEHOLDER_RE.fullmatch(ds) and not _PLACEHOLDER_RE.fullmatch(ss):
+            result.append(ss)
+    return result
 
 
 class HierarchyNormalizer:
@@ -138,28 +190,101 @@ class HierarchyNormalizer:
             # First pass: filter out sidecar duplicates and lift their children
             filtered_children = filter_duplicates_and_lift(children, parent_node)
             
+            # Record original order so we can restore it after grouping
+            original_index = {id(child): i for i, child in enumerate(filtered_children)}
+            
             # Second pass: group by (service_name, http_method, normalized_path, parameter_value)
-            groups = {}
+            # Uses fuzzy path matching so that paths from http.route (pre-parameterized)
+            # merge with paths from raw URLs (normalizer-parameterized).
+            # Pre-parameterized paths are sorted first so they establish the {param}
+            # template that concrete values (e.g., "Field", "data-model") can match against.
+            groups = {}  # key -> list of children
+            canonical_paths = {}  # key -> most-parameterized {param} form (for matching)
+            display_paths = {}  # key -> best original path with meaningful names (for display)
+            
             for child in filtered_children:
-                # Normalize again (in case we lifted unnormalized children)
                 normalize_node(child)
-                
-                # Create aggregation key
+            sorted_children = sorted(
+                filtered_children,
+                key=lambda c: -_normalize_path_for_matching(
+                    c.get('normalized_path', '')
+                ).count('{param}'),
+            )
+            
+            for child in sorted_children:
                 service = child.get('service_name', '')
                 method = child.get('http_method', '')
                 path = child.get('normalized_path', '')
                 param = child.get('parameter_value', '')
                 
-                # Include parameter in key to keep separate calls separate
-                key = (service, method, path, param)
+                match_path = _normalize_path_for_matching(path)
                 
-                if key not in groups:
-                    groups[key] = []
-                groups[key].append(child)
+                matched_key = None
+                for existing_key in groups:
+                    e_service, e_method, _, e_param = existing_key
+                    e_canonical = canonical_paths[existing_key]
+                    if (service == e_service and method == e_method and
+                        _paths_match_fuzzy(match_path, e_canonical) and
+                        (param == e_param or not param or not e_param)):
+                        matched_key = existing_key
+                        break
+                
+                if matched_key is not None:
+                    groups[matched_key].append(child)
+                    old_canonical = canonical_paths[matched_key]
+                    new_canonical = _pick_canonical_path(old_canonical, match_path)
+                    canonical_paths[matched_key] = new_canonical
+                    if match_path.count('{param}') > _normalize_path_for_matching(
+                        display_paths[matched_key]
+                    ).count('{param}'):
+                        display_paths[matched_key] = path
+                else:
+                    key = (service, method, match_path, param)
+                    groups[key] = [child]
+                    canonical_paths[key] = match_path
+                    display_paths[key] = path
+            
+            # Update all grouped nodes to use the best display path
+            # and capture concrete values that were absorbed by placeholders
+            for key, group_children in groups.items():
+                best_display = display_paths[key]
+                _, e_method, _, _ = key
+                
+                # Collect concrete values absorbed during merge
+                absorbed = set()
+                for child in group_children:
+                    for val in _extract_absorbed_values(
+                        child.get('normalized_path', ''), best_display
+                    ):
+                        absorbed.add(val)
+                
+                # Collect existing param values from ALL children so nothing is lost
+                all_params = set()
+                for child in group_children:
+                    ep = child.get('parameter_value', '')
+                    if ep:
+                        all_params.update(p.strip() for p in ep.split(',') if p.strip())
+                all_params.update(absorbed)
+                combined = ', '.join(sorted(all_params)) if all_params else ''
+                
+                for child in group_children:
+                    child['normalized_path'] = best_display
+                    child['parameter_value'] = combined
+                    if e_method:
+                        display_name = f"{e_method} {best_display}"
+                        if combined:
+                            display_name += f" ({combined})"
+                        child['span']['name'] = display_name
+            
+            # Restore original ordering: sort groups by earliest child's position
+            ordered_groups = sorted(
+                groups.values(),
+                key=lambda gc: min(original_index.get(id(c), float('inf')) for c in gc),
+            )
             
             # Aggregate each group
             aggregated = []
-            for group_children in groups.values():
+            for group_children in ordered_groups:
                 if len(group_children) == 1:
                     # Single node - just recursively process children
                     node = group_children[0]

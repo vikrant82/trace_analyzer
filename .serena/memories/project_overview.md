@@ -26,7 +26,8 @@ Trace Analyzer is a powerful OpenTelemetry trace analysis tool that processes tr
 
 ## Core Features
 - Interactive trace hierarchy with visual tree and dynamic highlighting (5-95% threshold slider)
-- Smart URL normalization (UUIDs, IDs, encoded strings, rule identifiers)
+- Smart URL normalization (UUIDs, IDs, encoded strings, rule identifiers, semver versions)
+- Fuzzy path matching (merges CLIENT raw URLs with SERVER `http.route` parameterized paths)
 - Service mesh filtering (eliminates Istio/Envoy duplicates)
 - Incoming vs Outgoing requests detection
 - Kafka/messaging operations tracking
@@ -49,15 +50,15 @@ Trace Analyzer is a powerful OpenTelemetry trace analysis tool that processes tr
 #### Extractors (`trace_analyzer/extractors/`)
 - `http_extractor.py` - HTTP endpoint extraction and classification
 - `kafka_extractor.py` - Kafka/messaging operation detection
-- `path_normalizer.py` - URL parameter normalization (96% coverage)
+- `path_normalizer.py` - URL parameter normalization incl. semver (96% coverage)
 
 #### Processors (`trace_analyzer/processors/`)
 - `file_processor.py` - Streaming JSON file reading (91% coverage)
 - `hierarchy_builder.py` - Builds span parent-child relationships (87% coverage)
 - `timing_calculator.py` - Calculates total and self-time (94% coverage)
-- `normalizer.py` - Normalizes HTTP/Kafka operations (96% coverage)
+- `normalizer.py` - Normalizes HTTP/Kafka operations + fuzzy path matching (86% coverage)
 - `aggregator.py` - Aggregates metrics per endpoint (84% coverage)
-- `metrics_populator.py` - Populates final metric structures (85% coverage)
+- `metrics_populator.py` - Populates final metric structures + fuzzy merge (80% coverage)
 
 #### Filters (`trace_analyzer/filters/`)
 - `service_mesh_filter.py` - Eliminates Istio/Envoy duplicates
@@ -103,6 +104,6 @@ tests/
 - **Before**: 1,033-line monolithic analyze_trace.py
 - **After**: 14 modular files across 6 subdirectories
 - **Backward Compatibility**: Original CLI and web interfaces unchanged
-- **Test Coverage**: 79% with comprehensive test suite (145 tests)
+- **Test Coverage:** 81% with comprehensive test suite (162 tests)
 - **Lines of Code**: analyze_trace.py: 1,033 → 59 lines
 

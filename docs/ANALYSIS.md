@@ -12,7 +12,7 @@ The fundamental difference is one of purpose:
 
 This is the most significant benefit. While Jaeger can show individual requests, it often struggles with high-cardinality endpoints, treating `/api/users/123` and `/api/users/456` as distinct operations.
 
-- **How Trace Analyzer is Different:** The `normalize_path` function in `trace_analyzer/extractors/path_normalizer.py` uses multiple regular expressions to intelligently group similar endpoints. It normalizes UUIDs, numeric IDs, and even application-specific identifiers (e.g., `AppName__ResourceName`) into placeholders like `{uuid}` and `{id}`.
+- **How Trace Analyzer is Different:** The `normalize_path` function in `trace_analyzer/extractors/path_normalizer.py` uses multiple regular expressions to intelligently group similar endpoints. It normalizes UUIDs, numeric IDs, semantic versions (e.g., `4.3.8`), and even application-specific identifiers (e.g., `AppName__ResourceName`) into placeholders like `{uuid}`, `{id}`, `{version}`, and `{rule_id}`. Additionally, fuzzy path matching merges endpoints from raw URL paths (CLIENT spans) with pre-parameterized framework routes like `http.route` (SERVER spans), ensuring calls through proxy/sidecar layers are correctly grouped with their application-level counterparts.
 - **Benefit:** This provides a clean, high-level, and actionable view of performance. Instead of a noisy list of thousands of unique URLs, you get a concise report showing the aggregated performance (total time, count, average time) for endpoint *patterns*. This makes it far easier to identify systemic issues with a particular type of operation.
 
 ### 2. Accurate `Self-Time` Calculation at Scale

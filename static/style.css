@@ -1053,8 +1053,12 @@ li[data-state="collapsed"]>ul {
     border-color: rgba(239, 68, 68, 0.5);
 }
 
-/* Tooltip for error details */
-.tree li.error-span[data-error-message]:hover::after {
+/* Tooltip for error details — shown on error badge hover only */
+.metric.error-badge {
+    position: relative;
+}
+
+.metric.error-badge[data-error-message]:hover::after {
     content: attr(data-error-message);
     position: absolute;
     left: 0;
@@ -1064,16 +1068,12 @@ li[data-state="collapsed"]>ul {
     padding: 8px 12px;
     border-radius: 6px;
     font-size: 0.85em;
-    white-space: nowrap;
     z-index: 1000;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     margin-top: 4px;
     max-width: 500px;
     white-space: normal;
-}
-
-.tree li.error-span[data-error-message]:hover {
-    position: relative;
+    pointer-events: none;
 }
 
 /* Error Filter Checkbox Styling */

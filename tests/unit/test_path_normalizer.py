@@ -120,3 +120,41 @@ class TestPathNormalizer:
         # Only non-UUID param (789) should be in the list
         assert len(params) >= 1
         assert "789" in params
+
+    def test_normalize_semver_version(self):
+        """Test normalizing paths with semantic version strings."""
+        normalizer = PathNormalizer()
+        
+        path = "/v1/abc/versions/4.3.8"
+        normalized, params = normalizer.normalize_path(path)
+        assert normalized == "/v1/abc/versions/{version}"
+        assert "4.3.8" in params
+    
+    def test_normalize_semver_four_part(self):
+        """Test normalizing paths with four-part version strings."""
+        normalizer = PathNormalizer()
+        
+        path = "/api/packages/1.0.0.1/download"
+        normalized, params = normalizer.normalize_path(path)
+        assert normalized == "/api/packages/{version}/download"
+        assert "1.0.0.1" in params
+    
+    def test_normalize_semver_with_uuid(self):
+        """Test that semver and UUID normalization work together."""
+        normalizer = PathNormalizer()
+        
+        path = "/v1/550e8400-e29b-41d4-a716-446655440000/model-artifacts/bundles/data-model/versions/4.3.8"
+        normalized, params = normalizer.normalize_path(path)
+        assert "{uuid}" in normalized
+        assert "{version}" in normalized
+        assert "data-model" in normalized
+        assert "4.3.8" not in normalized
+    
+    def test_semver_not_matching_plain_numbers(self):
+        """Test that plain numbers are not matched as semver."""
+        normalizer = PathNormalizer()
+        
+        path = "/api/items/42/details"
+        normalized, params = normalizer.normalize_path(path)
+        assert "{id}" in normalized
+        assert "{version}" not in normalized
