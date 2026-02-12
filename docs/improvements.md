@@ -53,6 +53,14 @@ The following features have been successfully implemented:
 - **Rich metadata**: file size, duration, trace/span/service/endpoint counts
 - **Configurable log level** via `TRACE_ANALYZER_LOG_LEVEL` environment variable
 
+### Parallel Trace Processing (February 2026)
+- **Multiprocessing-based parallelism** for multi-trace files
+- **Automatic activation** when file contains ≥4 traces
+- **Configurable worker count** via `num_workers` parameter (default: CPU count)
+- **Progress reporting** for long-running analyses
+- **Graceful fallback** to sequential processing for small files
+- **Expected speedup**: 2-4x on multi-core systems for files with many traces
+
 ---
 
 ## 1. Core Engine Enhancements (`analyze_trace.py`)

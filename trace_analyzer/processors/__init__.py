@@ -6,6 +6,7 @@ from .timing_calculator import TimingCalculator
 from .aggregator import NodeAggregator
 from .metrics_populator import MetricsPopulator
 from .normalizer import HierarchyNormalizer
+from .parallel_processor import ParallelTraceProcessor
 
 __all__ = [
     "TraceFileProcessor",
@@ -14,4 +15,5 @@ __all__ = [
     "NodeAggregator",
     "MetricsPopulator",
     "HierarchyNormalizer",
+    "ParallelTraceProcessor",
 ]

@@ -3,7 +3,7 @@ Main trace analyzer orchestrator.
 """
 
 from collections import defaultdict
-from typing import DefaultDict, Tuple
+from typing import DefaultDict, Tuple, Optional
 
 from ..core.types import TraceConfig, EndpointStats, KafkaStats
 from ..extractors import HttpExtractor, KafkaExtractor, PathNormalizer
@@ -13,7 +13,8 @@ from ..processors import (
     TimingCalculator,
     NodeAggregator,
     MetricsPopulator,
-    HierarchyNormalizer
+    HierarchyNormalizer,
+    ParallelTraceProcessor
 )
 from ..formatters import format_time
 
@@ -25,7 +26,9 @@ class TraceAnalyzer:
         self,
         strip_query_params: bool = True,
         include_gateway_services: bool = False,
-        include_service_mesh: bool = False
+        include_service_mesh: bool = False,
+        num_workers: Optional[int] = None,
+        parallel: bool = True
     ):
         """
         Initialize the TraceAnalyzer.
@@ -34,7 +37,11 @@ class TraceAnalyzer:
             strip_query_params: If True, removes query parameters from URLs before analysis
             include_gateway_services: If True, includes services that only have CLIENT spans
             include_service_mesh: If True, includes service mesh sidecar spans
+            num_workers: Number of parallel workers (default: CPU count, only if parallel=True)
+            parallel: If True, uses parallel processing for multi-trace files
         """
+        self.num_workers = num_workers
+        self.parallel = parallel
         # Configuration
         self.config = TraceConfig(
             strip_query_params=strip_query_params,
@@ -135,10 +142,50 @@ class TraceAnalyzer:
                                 len([k for k, v in self.kafka_messages.items() if v['error_count'] > 0]))
         print(f"Found {total_errors} total errors across {total_error_endpoints} unique endpoints/operations")
     
+    MIN_TRACES_FOR_PARALLEL = 4
+    
     def _process_collected_traces(self):
         """
         Iterate through each collected trace, build its hierarchy, calculate
         timings, and then populate the flat metrics for the summary tables.
+        Uses parallel processing when enabled and enough traces exist.
+        """
+        if self.parallel and len(self.traces) >= self.MIN_TRACES_FOR_PARALLEL:
+            self._process_traces_parallel()
+        else:
+            self._process_traces_sequential()
+    
+    def _process_traces_parallel(self):
+        """
+        Process traces in parallel using multiprocessing.
+        """
+        processor = ParallelTraceProcessor(self.config, self.num_workers)
+        
+        def progress_callback(completed, total):
+            if total > 10 and completed % max(1, total // 10) == 0:
+                print(f"  Processed {completed}/{total} traces...")
+        
+        hierarchies, summaries, ep, sc, km, eff = processor.process_traces(
+            self.traces, progress_callback
+        )
+        
+        self.trace_hierarchies = hierarchies
+        self.trace_summary = summaries
+        
+        for key, stats in ep.items():
+            self.endpoint_params[key] = stats
+        
+        for key, stats in sc.items():
+            self.service_calls[key] = stats
+        
+        for key, stats in km.items():
+            self.kafka_messages[key] = stats
+        
+        self.effective_times = eff
+    
+    def _process_traces_sequential(self):
+        """
+        Process traces sequentially (original implementation).
         """
         for trace_id, spans in self.traces.items():
             # Pass 1 & 2: Build the raw hierarchy and a flat map of all nodes
